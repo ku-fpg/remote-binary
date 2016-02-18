@@ -23,37 +23,42 @@ import           Control.Natural
 import qualified Control.Remote.Monad.Packet.Weak as WP
 import           Control.Remote.Monad.Binary.Types
 import           Data.Binary
-
-instance Binary (T (WP.WeakPacket Command Procedure)) where
-      put (T (WP.Command c)) = do put (0 :: Word8)
-                                  put c
-
-      get = do i <- get
-               case i :: Word8 of
-                 0 -> ( T . WP.Command )<$> get
+import qualified Data.ByteString.Lazy as BS
 
 
 sendWeakBinary :: (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
-sendWeakBinary f pkt@(WP.Command c)   = f (Async (encode (T pkt)))
+sendWeakBinary f pkt@(WP.Command c)   = do r <- f (Sync (encode (T pkt))) 
+                                           return ()
+--sendWeakBinary f pkt@(WP.Procedure p) = f (Sync (encode (T pkt)))
 
 
-data BinaryNatTrans f g = BinaryNatTrans (forall a. (Binary a) => f a -> g a)
 
 
 runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure)  IO 
-runWeakBinary = BinaryNatTrans $ \ (WP.Command c) -> runCommand c
+runWeakBinary = BinaryNatTrans  dispatchPacket
 
 receiveSendAPI :: BinaryNatTrans (WP.WeakPacket Command Procedure)  IO -> (SendAPI ~> IO)
-receiveSendAPI (BinaryNatTrans f) (Async c) = do 
+receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
                      print c
                      case decode c of 
-                       (T c') -> void $f c'
-
-runCommand :: Command -> IO ()
-runCommand (Command n) = print $ "Push "++ (show n)  
-
-
+                       (T v{-@(WP.Command _c)-}) -> do  
+                                     r <- f v
+                                     return Nothing
+{-
+receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
+                     print c
+                     case decode c of
+                       (T c') ->do  
+                                   v <- f c'
+                                   print v
+                                   return $ encode v
+-}
+dispatchPacket :: WP.WeakPacket Command Procedure a -> IO a
+dispatchPacket (WP.Command (Command n)) = print $ "Push "++ (show n)  
+{-dispatchPacket (WP.Procedure (Procedure)) = do print $ "Pop"  
+                                               return (5 ::Int)
+-}
 main::IO()
 main = do 
         let f1 = receiveSendAPI runWeakBinary
-        sendWeakBinary f1 (WP.Command (Command 9))
+        sendWeakBinary f1 (WP.Command (Command 3))
