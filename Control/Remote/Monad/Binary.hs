@@ -23,13 +23,17 @@ import           Control.Natural
 import qualified Control.Remote.Monad.Packet.Weak as WP
 import           Control.Remote.Monad.Binary.Types
 import           Data.Binary
+import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BS
 
 
 sendWeakBinary :: (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
-sendWeakBinary f pkt@(WP.Command c)   = do r <- f (Sync (encode (T pkt))) 
-                                           return ()
---sendWeakBinary f pkt@(WP.Procedure p) = f (Sync (encode (T pkt)))
+--sendWeakBinary f pkt@(WP.Command c)   = do r <- f (Sync (encode (T pkt))) 
+--                                           return ()
+sendWeakBinary f pkt = do 
+                        (Just r) <- f (Sync (runPut $ encodeWeakPacket  pkt))
+                        return $ decodeWeakPacketResult pkt r 
+                                             
 
 
 
@@ -43,7 +47,7 @@ receiveSendAPI (BinaryNatTrans f) (Sync c) = do
                      case decode c of 
                        (T v{-@(WP.Command _c)-}) -> do  
                                      r <- f v
-                                     return Nothing
+                                     return $ Just $ encodeWeakPacketResult v r
 {-
 receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
                      print c
@@ -55,10 +59,12 @@ receiveSendAPI (BinaryNatTrans f) (Sync c) = do
 -}
 dispatchPacket :: WP.WeakPacket Command Procedure a -> IO a
 dispatchPacket (WP.Command (Command n)) = print $ "Push "++ (show n)  
-{-dispatchPacket (WP.Procedure (Procedure)) = do print $ "Pop"  
+dispatchPacket (WP.Procedure (Procedure)) = do print $ "Pop"  
                                                return (5 ::Int)
--}
+
 main::IO()
 main = do 
         let f1 = receiveSendAPI runWeakBinary
-        sendWeakBinary f1 (WP.Command (Command 3))
+        r <- sendWeakBinary f1 (WP.Procedure (Procedure))
+        print r
+        return ()

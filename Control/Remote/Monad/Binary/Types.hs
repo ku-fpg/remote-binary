@@ -24,6 +24,9 @@
  module Control.Remote.Monad.Binary.Types (
    BinaryNatTrans(..)
  , Command(..)
+ , encodeWeakPacket
+ , decodeWeakPacketResult
+ , encodeWeakPacketResult
  , Procedure(..)
  , RemoteBinary(..)
  , SendAPI(..)
@@ -39,7 +42,7 @@ import Data.ByteString.Lazy
 import Data.Binary
 
 data Command :: * where
-   Command :: Int -> Command
+   Command :: Int -> Command   -- PUSH
 
 instance Binary Command where
    put (Command n) = put n
@@ -47,9 +50,24 @@ instance Binary Command where
             return $ Command i
 
 data Procedure :: * -> * where
-  Procedure :: Procedure Int
+  Procedure :: Procedure Int    -- POP
 
 
+encodeProcedure:: Procedure a -> Put
+encodeProcedure p@(Procedure{}) = put (T p)
+
+
+decodeProcedureResult :: Procedure a -> ByteString -> a
+decodeProcedureResult (Procedure)= decode
+
+encodeProcedureResult :: Procedure a -> a -> ByteString
+encodeProcedureResult (Procedure) = encode
+
+instance Binary (T Procedure ) where
+   put (T Procedure) = put (0::Word8)
+   get = do i <- get 
+            case i :: Word8 of
+               0 -> return $ T Procedure
 
 data SendAPI :: * -> * where
     Sync  :: ByteString -> SendAPI (Maybe ByteString)
@@ -112,12 +130,31 @@ data T f where
 data BinaryNatTrans f g = BinaryNatTrans (forall a. (Binary a) => f a -> g a)
 
 instance Binary (T (WP.WeakPacket Command Procedure)) where
-      put (T (WP.Command c)) = do put (0 :: Word8)
+      put (T (WP.Command c)) = do 
+                                  put (0 :: Word8)
                                   put c
+          
+      put (T (WP.Procedure c)) = do 
+                                  put (1 :: Word8)
+                                  put (T c)
 
       get = do i <- get
                case i :: Word8 of
-                 0 -> ( T . WP.Command )<$> get
+                 0 -> ( T . WP.Command )  <$> get
+                 1 -> (\(T p) -> T $ WP.Procedure  $ p)<$> get
 
 
+encodeWeakPacket :: WP.WeakPacket Command Procedure a -> Put 
+encodeWeakPacket (WP.Procedure p) = do
+                                        put (1 :: Word8)
+                                        encodeProcedure p
+
+encodeWeakPacket c@(WP.Command {}) = put (T c)
+
+
+decodeWeakPacketResult :: WP.WeakPacket Command Procedure a -> ByteString -> a
+decodeWeakPacketResult (WP.Procedure p) = decodeProcedureResult p
+
+encodeWeakPacketResult :: WP.WeakPacket Command Procedure a ->  a -> ByteString
+encodeWeakPacketResult (WP.Procedure p) = encodeProcedureResult p
 
