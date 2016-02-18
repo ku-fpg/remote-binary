@@ -23,6 +23,7 @@
 
  module Control.Remote.Monad.Binary.Types (
    BinaryNatTrans(..)
+ , BinaryX
  , Command(..)
  , encodeWeakPacket
  , decodeWeakPacketResult
@@ -56,12 +57,10 @@ data Procedure :: * -> * where
 encodeProcedure:: Procedure a -> Put
 encodeProcedure p@(Procedure{}) = put (T p)
 
+instance BinaryX Procedure  where
+    decodeProcedureResult (Procedure)= decode
+    encodeProcedureResult (Procedure) = encode
 
-decodeProcedureResult :: Procedure a -> ByteString -> a
-decodeProcedureResult (Procedure)= decode
-
-encodeProcedureResult :: Procedure a -> a -> ByteString
-encodeProcedureResult (Procedure) = encode
 
 instance Binary (T Procedure ) where
    put (T Procedure) = put (0::Word8)
@@ -70,7 +69,7 @@ instance Binary (T Procedure ) where
                0 -> return $ T Procedure
 
 data SendAPI :: * -> * where
-    Sync  :: ByteString -> SendAPI (Maybe ByteString)
+    Sync  :: ByteString -> SendAPI ByteString
 --    Async :: ByteString -> SendAPI ()
 
 instance Binary (T SendAPI) where
@@ -152,9 +151,14 @@ encodeWeakPacket (WP.Procedure p) = do
 encodeWeakPacket c@(WP.Command {}) = put (T c)
 
 
-decodeWeakPacketResult :: WP.WeakPacket Command Procedure a -> ByteString -> a
+decodeWeakPacketResult :: (BinaryX p) => WP.WeakPacket Command p a -> ByteString -> a
 decodeWeakPacketResult (WP.Procedure p) = decodeProcedureResult p
 
-encodeWeakPacketResult :: WP.WeakPacket Command Procedure a ->  a -> ByteString
+encodeWeakPacketResult :: (BinaryX p) => WP.WeakPacket Command p a ->  a -> ByteString
 encodeWeakPacketResult (WP.Procedure p) = encodeProcedureResult p
+
+
+class BinaryX p  where
+  decodeProcedureResult :: p a -> ByteString -> a
+  encodeProcedureResult :: p a -> a -> ByteString
 

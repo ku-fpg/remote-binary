@@ -31,7 +31,7 @@ sendWeakBinary :: (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
 --sendWeakBinary f pkt@(WP.Command c)   = do r <- f (Sync (encode (T pkt))) 
 --                                           return ()
 sendWeakBinary f pkt = do 
-                        (Just r) <- f (Sync (runPut $ encodeWeakPacket  pkt))
+                        r <- f (Sync (runPut $ encodeWeakPacket  pkt))
                         return $ decodeWeakPacketResult pkt r 
                                              
 
@@ -47,7 +47,7 @@ receiveSendAPI (BinaryNatTrans f) (Sync c) = do
                      case decode c of 
                        (T v{-@(WP.Command _c)-}) -> do  
                                      r <- f v
-                                     return $ Just $ encodeWeakPacketResult v r
+                                     return $ encodeWeakPacketResult v r
 {-
 receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
                      print c
@@ -65,6 +65,7 @@ dispatchPacket (WP.Procedure (Procedure)) = do print $ "Pop"
 main::IO()
 main = do 
         let f1 = receiveSendAPI runWeakBinary
+        sendWeakBinary f1 (WP.Command (Command 9))
         r <- sendWeakBinary f1 (WP.Procedure (Procedure))
         print r
         return ()
