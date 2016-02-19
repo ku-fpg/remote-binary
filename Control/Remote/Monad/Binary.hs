@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-} 
 
 {-|
-Module:      Control.Remote.Monad.JSON where
+Module:      Control.Remote.Monad.Binary
 Copyright:   (C) 2015, The University of Kansas
 License:     BSD-style (see the file LICENSE)
 Maintainer:  Justin Dawson
@@ -27,9 +27,7 @@ import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BS
 
 
-sendWeakBinary :: (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
---sendWeakBinary f pkt@(WP.Command c)   = do r <- f (Sync (encode (T pkt))) 
---                                           return ()
+sendWeakBinary :: (Binary a) => (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
 sendWeakBinary f pkt = do 
                         r <- f (Sync (runPut $ encodeWeakPacket  pkt))
                         return $ decodeWeakPacketResult pkt r 
