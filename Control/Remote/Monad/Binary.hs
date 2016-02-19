@@ -13,12 +13,7 @@ Stability:   Alpha
 Portability: GHC
 -}
 
-module Control.Remote.Monad.Binary (
-
-
-
-
-) where
+module Control.Remote.Monad.Binary  where
 import           Control.Monad (void)
 import           Control.Natural
 import qualified Control.Remote.Monad.Packet.Weak as WP
@@ -28,28 +23,8 @@ import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BS
 
 
-data Command :: * where
-   Command :: Int -> Command   -- PUSH
 
-instance Binary Command where
-   put (Command n) = put n
-   get = do i <- get
-            return $ Command i
-
-data Procedure :: * -> * where
-  Procedure :: Procedure Int    -- POP
-
-instance BinaryX Procedure
-
-
-instance Binary (T Procedure ) where
-   put (T Procedure) = put (0::Word8)
-   get = do i <- get 
-            case i :: Word8 of
-               0 -> return $ T Procedure
-
-
-sendWeakBinary :: (Binary a) => (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a
+sendWeakBinary :: (Binary a, Binary c, BinaryX p) => (SendAPI ~> IO) -> WP.WeakPacket c p a -> IO a
 sendWeakBinary f pkt = do 
                         r <- f (Sync (runPut $ encodeWeakPacket  pkt))
                         return $ decodeWeakPacketResult pkt r 
@@ -57,11 +32,12 @@ sendWeakBinary f pkt = do
 
 
 
-
+{-
 runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure)  IO 
 runWeakBinary = BinaryNatTrans  dispatchPacket
+-}
 
-receiveSendAPI :: BinaryNatTrans (WP.WeakPacket Command Procedure)  IO -> (SendAPI ~> IO)
+receiveSendAPI :: (Binary c, BinaryX p) => BinaryNatTrans (WP.WeakPacket c p)  IO -> (SendAPI ~> IO)
 receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
                      print c
                      case decode c of 
@@ -77,15 +53,3 @@ receiveSendAPI (BinaryNatTrans f) (Sync c) = do
                                    print v
                                    return $ encode v
 -}
-dispatchPacket :: WP.WeakPacket Command Procedure a -> IO a
-dispatchPacket (WP.Command (Command n)) = print $ "Push "++ (show n)  
-dispatchPacket (WP.Procedure (Procedure)) = do print $ "Pop"  
-                                               return (5 ::Int)
-
-main::IO()
-main = do 
-        let f1 = receiveSendAPI runWeakBinary
-        sendWeakBinary f1 (WP.Command (Command 9))
-        r <- sendWeakBinary f1 (WP.Procedure (Procedure))
-        print r
-        return ()
