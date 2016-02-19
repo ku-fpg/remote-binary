@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-} 
 {-# LANGUAGE RankNTypes #-} 
+{-# LANGUAGE KindSignatures #-} 
 {-# LANGUAGE TypeOperators #-} 
 {-# LANGUAGE FlexibleInstances #-} 
 
@@ -25,6 +26,27 @@ import           Control.Remote.Monad.Binary.Types
 import           Data.Binary
 import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BS
+
+
+data Command :: * where
+   Command :: Int -> Command   -- PUSH
+
+instance Binary Command where
+   put (Command n) = put n
+   get = do i <- get
+            return $ Command i
+
+data Procedure :: * -> * where
+  Procedure :: Procedure Int    -- POP
+
+instance BinaryX Procedure
+
+
+instance Binary (T Procedure ) where
+   put (T Procedure) = put (0::Word8)
+   get = do i <- get 
+            case i :: Word8 of
+               0 -> return $ T Procedure
 
 
 sendWeakBinary :: (Binary a) => (SendAPI ~> IO) -> WP.WeakPacket Command Procedure a -> IO a

@@ -25,11 +25,9 @@
  module Control.Remote.Monad.Binary.Types (
    BinaryNatTrans(..)
  , BinaryX
- , Command(..)
  , encodeWeakPacket
  , decodeWeakPacketResult
  , encodeWeakPacketResult
- , Procedure(..)
  , SendAPI(..)
  , T(..)
  ) where
@@ -41,31 +39,6 @@ import qualified Control.Remote.Monad.Packet.Weak as WP
 import Data.ByteString.Lazy
 import Data.Binary
 
-data Command :: * where
-   Command :: Int -> Command   -- PUSH
-
-instance Binary Command where
-   put (Command n) = put n
-   get = do i <- get 
-            return $ Command i
-
-data Procedure :: * -> * where
-  Procedure :: Procedure Int    -- POP
-
-
-encodeProcedure:: (BinaryX p, Binary a) => p a -> Put
-encodeProcedure p = put (T p)
-
-instance BinaryX Procedure  where
-    decodeProcedureResult (Procedure)= decode
-    encodeProcedureResult (Procedure) = encode
-
-
-instance Binary (T Procedure ) where
-   put (T Procedure) = put (0::Word8)
-   get = do i <- get 
-            case i :: Word8 of
-               0 -> return $ T Procedure
 
 data SendAPI :: * -> * where
     Sync  :: ByteString -> SendAPI ByteString
@@ -120,16 +93,22 @@ encodeWeakPacket (WP.Procedure p) = do
 encodeWeakPacket c@(WP.Command {}) = put (T c)
 
 
-decodeWeakPacketResult :: (BinaryX p) => WP.WeakPacket c p a -> ByteString -> a
+decodeWeakPacketResult :: (BinaryX p, Binary a) => WP.WeakPacket c p a -> ByteString -> a
 decodeWeakPacketResult (WP.Procedure p) = decodeProcedureResult p
 
-encodeWeakPacketResult :: (BinaryX p) => WP.WeakPacket c p a ->  a -> ByteString
+encodeWeakPacketResult :: (BinaryX p, Binary a) => WP.WeakPacket c p a ->  a -> ByteString
 encodeWeakPacketResult (WP.Procedure p) = encodeProcedureResult p
 
 
 class (Binary (T p)) => BinaryX p  where
-  decodeProcedureResult :: p a -> ByteString -> a
-  encodeProcedureResult :: p a -> a -> ByteString
+  decodeProcedureResult :: (Binary a) =>  p a -> ByteString -> a
+  decodeProcedureResult p = decode
+
+  encodeProcedureResult :: (Binary a) => p a -> a -> ByteString
+  encodeProcedureResult p = encode 
+
+  encodeProcedure:: (BinaryX p, Binary a) => p a -> Put
+  encodeProcedure p = put (T p)
 
 
 
