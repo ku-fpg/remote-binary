@@ -41,15 +41,7 @@ receiveSendAPI :: (Binary c, BinaryX p) => BinaryNatTrans (WP.WeakPacket c p)  I
 receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
                      print c
                      case decode c of 
-                       (T v{-@(WP.Command _c)-}) -> do  
-                                     r <- f v
-                                     return $ encodeWeakPacketResult v r
-{-
-receiveSendAPI (BinaryNatTrans f) (Sync c) = do 
-                     print c
-                     case decode c of
-                       (T c') ->do  
-                                   v <- f c'
-                                   print v
-                                   return $ encode v
--}
+                       (T v) -> do  
+                                  r <- f v
+                                  return $ encodeWeakPacketResult v r
+
