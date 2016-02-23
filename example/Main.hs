@@ -5,6 +5,7 @@
 import           Control.Natural
 import           Control.Remote.Monad
 import qualified Control.Remote.Monad.Packet.Weak as WP
+import qualified Control.Remote.Monad.Packet.Strong as SP
 import           Control.Remote.Monad.Binary.Types
 import           Control.Remote.Monad.Binary
 import           Data.Binary
@@ -31,21 +32,42 @@ instance BinaryX Procedure
 
 
 
-dispatchPacket :: WP.WeakPacket Command Procedure a -> IO a
-dispatchPacket (WP.Command (Push n)) = print $ "Push "++ (show n)
-dispatchPacket (WP.Procedure (Pop)) = do 
+dispatchWeakPacket :: WP.WeakPacket Command Procedure a -> IO a
+dispatchWeakPacket (WP.Command (Push n)) = print $ "Push "++ (show n)
+dispatchWeakPacket (WP.Procedure (Pop)) = do 
                                          print $ "Pop"
                                          return (5 ::Int)
 
-runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure) IO
-runWeakBinary = BinaryNatTrans dispatchPacket
+dispatchStrongPacket :: SP.StrongPacket Command Procedure a -> IO a
+dispatchStrongPacket (SP.Command (Push n) cmds) = do  
+                                    print $ "Push " ++ (show n)
+                                    dispatchStrongPacket cmds
+dispatchStrongPacket (SP.Procedure Pop)  = do  
+                                    print $ "Pop"
+                                    return (6 :: Int)
 
+dispatchStrongPacket (SP.Done) = return () 
+
+runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure) IO
+runWeakBinary = BinaryNatTrans dispatchWeakPacket
+
+runStrongBinary :: BinaryNatTrans (SP.StrongPacket Command Procedure) IO
+runStrongBinary = BinaryNatTrans dispatchStrongPacket
 
 
 main::IO()
 main = do 
-        let f1 = receiveSendAPI runWeakBinary
+        putStrLn "Weak:"
+        let f1 = receiveWeakSendAPI runWeakBinary
         sendWeakBinary f1 (WP.Command (Push 9):: WP.WeakPacket Command Procedure ())
         r <- sendWeakBinary f1 (WP.Procedure (Pop):: WP.WeakPacket Command Procedure Int)
         print r
+ 
+        putStrLn "Strong:"
+        let f2 = receiveStrongSendAPI runStrongBinary
+        sendStrongBinary f2 (SP.Command (Push 8) (SP.Command (Push 7) (SP.Done)) :: SP.StrongPacket Command Procedure ())
+        r <- sendStrongBinary f2 (SP.Command (Push 5) (SP.Command (Push 6) (SP.Procedure Pop)) :: SP.StrongPacket Command Procedure Int)
+        print r
+
+
         return ()
