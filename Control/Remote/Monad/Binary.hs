@@ -27,17 +27,17 @@ import qualified Data.ByteString.Lazy as BS
 
 
 -- ##### Weak Packet  ######
-sendWeakBinary :: (Binary a, Binary c,BinaryGetReplyX p, BinaryPutX p) => (SendAPI ~> IO) -> WP.WeakPacket c p a -> IO a
+sendWeakBinary :: (Binary a, Binary c,BinaryQ p) => (SendAPI ~> IO) -> WP.WeakPacket c p a -> IO a
 sendWeakBinary f pkt = do 
                         r <- f (Sync (encodeWeakPacket  pkt))
                         return $ decodeWeakPacketResult pkt r 
                                              
 
 
-receiveWeakSendAPI :: (Binary c, BinaryGetX p, BinaryGetReplyX p) => BinaryNatTrans (WP.WeakPacket c p)  IO -> (SendAPI ~> IO)
+receiveWeakSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (WP.WeakPacket c p)  IO -> (SendAPI ~> IO)
 receiveWeakSendAPI (BinaryNatTrans f) (Sync c) = do 
-                     case runGet getX c of 
-                       (GetX f' v) -> do  
+                     case runGet getQ c of 
+                       (Query f' v) -> do  
                                   r  <- f v 
                                   return $ runPut (f' r) 
 

@@ -24,16 +24,13 @@ instance Binary Command where
 data Procedure :: * -> * where
   Pop :: Procedure Int    -- POP
 
-instance BinaryGetX Procedure where
-   getX = do i <- get
+instance BinaryQ Procedure where
+   getQ = do i <- get
              case i :: Word8 of
-               0 -> return $ GetX put Pop
+               0 -> return $ Query put Pop
+   putQ (Pop)= put (0 :: Word8) 
 
-instance BinaryPutX Procedure where
-  putX (Pop)= put (0 :: Word8) 
-
-instance BinaryGetReplyX Procedure where
-  getReplyX (Pop) = get
+   interpQ (Pop) = get
 
 
 {-

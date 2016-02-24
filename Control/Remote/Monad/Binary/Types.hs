@@ -89,41 +89,40 @@ data T' f where
 
 -- ############## Weak Packet #######################
 
-instance (Binary c, BinaryPutX p) => BinaryPutX (WP.WeakPacket c p) where
-  putX = putWeakPacket
+instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
+  putQ = putWeakPacket
+
+  getQ = do
+       i <- get
+       case i :: Word8 of
+          0 -> do 
+                c <- get
+                return $ Query put (WP.Command c)
+          1 -> do 
+                (Query f p) <- getQ
+                return $ Query f (WP.Procedure p)
+
+  interpQ (WP.Command c)   = return ()
+  interpQ (WP.Procedure p) = interpQ p
 
 
-putWeakPacket :: (Binary c, BinaryPutX p) => WP.WeakPacket c p a -> Put
+putWeakPacket :: (Binary c, BinaryQ p) => WP.WeakPacket c p a -> Put
 putWeakPacket (WP.Command c) = do
    put (0 :: Word8)
    put c
 putWeakPacket (WP.Procedure p)= do
    put (1 :: Word8)
-   putX p
-
-instance (Binary c, BinaryGetX p) => BinaryGetX (WP.WeakPacket c p) where
-  getX = do
-       i <- get
-       case i :: Word8 of
-          0 -> do 
-                c <- get
-                return $ GetX put (WP.Command c)
-          1 -> do 
-                (GetX f p) <- getX
-                return $ GetX f (WP.Procedure p)
+   putQ p
 
 
-instance (BinaryGetReplyX p) => BinaryGetReplyX (WP.WeakPacket c p) where
-  getReplyX (WP.Command c)   = return ()
-  getReplyX (WP.Procedure p) = getReplyX p
 
+encodeWeakPacket :: (Binary c, BinaryQ p)=> WP.WeakPacket c p a -> ByteString 
+encodeWeakPacket pkt = runPut (putQ pkt) 
 
-encodeWeakPacket :: (Binary c, BinaryPutX p)=> WP.WeakPacket c p a -> ByteString 
-encodeWeakPacket pkt = runPut (putX pkt) 
+decodeWeakPacketResult :: (BinaryQ p, Binary c, Binary a) => WP.WeakPacket c p a -> ByteString -> a
+decodeWeakPacketResult pkt = runGet (interpQ pkt)
 
-decodeWeakPacketResult :: (BinaryGetReplyX p, Binary a) => WP.WeakPacket c p a -> ByteString -> a
-decodeWeakPacketResult pkt = runGet (getReplyX pkt)
-encodeWeakPacketResult :: (BinaryPutX p, Binary a) => WP.WeakPacket c p a ->  a -> ByteString
+encodeWeakPacketResult :: (BinaryQ p, Binary a) => WP.WeakPacket c p a ->  a -> ByteString
 encodeWeakPacketResult (WP.Procedure p) = undefined
 
 ---- ############ Strong Packet ##########################
@@ -208,18 +207,18 @@ encodeWeakPacketResult (WP.Procedure p) = undefined
 --    
 --     get = undefined
 ---}
- 
+{- 
 
-instance (Binary c, BinaryPutX p) => BinaryPutX (AP.ApplicativePacket c p) where
-  putX = putApplicativePacket 
+instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
+  putQ = putApplicativePacket 
 
-putApplicativePacket :: (Binary c, BinaryPutX p) => AP.ApplicativePacket c p a -> Put
+putApplicativePacket :: (Binary c, BinaryQ p) => AP.ApplicativePacket c p a -> Put
 putApplicativePacket (AP.Command c) = do
     put (0 :: Word8)
     put c
 putApplicativePacket (AP.Procedure p) = do
     put (1 :: Word8)
-    putX p
+    putQ p
 putApplicativePacket (AP.Zip  _ a b) = do
     put (2 :: Word8)
     putApplicativePacket a
@@ -229,12 +228,13 @@ putApplicativePacket (AP.Pure _) = do
 
 
 instance (Binary c, BinaryGetX p) => BinaryGetX (AP.ApplicativePacket c p) where
-    getX = do
+    getQ = do
          i <- get
          case i :: Word8 of
             0 -> do
                  c <- get
                  return $ GetX put (AP.Command c)
+-}
 {-
             1 -> (\(T p ) -> T $ AP.Procedure $ p) <$> get
             2 -> do (T a) <- get
@@ -243,13 +243,13 @@ instance (Binary c, BinaryGetX p) => BinaryGetX (AP.ApplicativePacket c p) where
                     return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
             3 -> undefined 
 -}
-
+{-
 instance (BinaryGetReplyX p) => BinaryGetReplyX (AP.ApplicativePacket c p) where
-  getReplyX (AP.Command c)   = return ()
-  getReplyX (AP.Procedure p) = getReplyX p
-  getReplyX (AP.Zip f x y)   = f <$> getReplyX x <*> getReplyX y
-  getReplyX (AP.Pure a)      = return a
-
+  interpQ (AP.Command c)   = return ()
+  interpQ (AP.Procedure p) = interpQ p
+  interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
+  interpQ (AP.Pure a)      = return a
+-}
 --          
 --encodeApplicativePacket :: (Binary c, Binary a, BinaryX p) => AP.ApplicativePacket c p a -> ByteString 
 --encodeApplicativePacket pkt = encode (T pkt)
@@ -262,35 +262,12 @@ instance (BinaryGetReplyX p) => BinaryGetReplyX (AP.ApplicativePacket c p) where
 --decodeApplicativePacketResult (AP.Zip f a b)=  --TODO somehow convert ByteString -> to input parameters for f 
 
 data Query (p :: * -> *) where
-   Query :: (a -> Put) -> p a -> Query p
+   Query :: (Binary a) => (a -> Put) -> p a -> Query p
 
 class BinaryQ p  where
   putQ    :: p a -> Put     -- encode a query/question
   getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
   interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
-
-class BinaryPutX p  where
-  putX :: p a -> Put
-
-data GetX (p :: * -> *) where
-   GetX :: (Binary a)=>(a -> Put) -> p a -> GetX p
-
-class BinaryGetX p  where
-  getX :: Get (GetX p)
-
-class BinaryGetReplyX p  where
-  getReplyX :: p a -> Get a
-
-class (Binary (T p)) => BinaryX p  where
-  decodeProcedureResult :: (Binary a) =>  p a -> ByteString -> a
-  decodeProcedureResult p = decode
-
-  encodeProcedureResult :: (Binary a) => p a -> a -> ByteString
-  encodeProcedureResult p = encode 
-
-  encodeProcedure:: (BinaryX p, Binary a) => p a -> Put
-  encodeProcedure p = put (T p)
-
 
 -- Artifacts
 
