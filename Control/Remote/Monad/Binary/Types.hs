@@ -126,6 +126,46 @@ encodeWeakPacketResult :: (BinaryQ p, Binary a) => WP.WeakPacket c p a ->  a -> 
 encodeWeakPacketResult (WP.Procedure p) = undefined
 
 ---- ############ Strong Packet ##########################
+
+instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
+  putQ = putStrongPacket
+
+  getQ = do
+       i <- get
+       case i :: Word8 of
+          0 -> do 
+                c <- get
+                (Query f cmds) <- getQ
+                return $ Query f (SP.Command c cmds)
+          1 -> do 
+                (Query f p) <- getQ
+                return $ Query f (SP.Procedure p)
+          2 -> do
+                return $ Query put (SP.Done)
+
+  interpQ (SP.Command c cmds)   = interpQ cmds
+  interpQ (SP.Procedure p) = interpQ p
+
+
+putStrongPacket :: (Binary c, BinaryQ p) => SP.StrongPacket c p a -> Put
+putStrongPacket (SP.Command c cmds) = do
+   put (0 :: Word8)
+   put c
+   putStrongPacket cmds
+putStrongPacket (SP.Procedure p)= do
+   put (1 :: Word8)
+   putQ p
+putStrongPacket (SP.Done) = put (2 :: Word8)
+
+encodeStrongPacket :: (Binary c, BinaryQ p)=> SP.StrongPacket c p a -> ByteString 
+encodeStrongPacket pkt = runPut (putQ pkt) 
+
+decodeStrongPacketResult :: (BinaryQ p, Binary c, Binary a) => SP.StrongPacket c p a -> ByteString -> a
+decodeStrongPacketResult pkt = runGet (interpQ pkt)
+
+encodeStrongPacketResult :: (BinaryQ p, Binary a) => SP.StrongPacket c p a ->  a -> ByteString
+encodeStrongPacketResult (SP.Procedure p) = undefined
+
 --instance (Binary c, BinaryX p) => Binary (T (SP.StrongPacket c p)) where
 --      put (T (SP.Command c cmds)) = do   
 --                          put ( 0 :: Word8)

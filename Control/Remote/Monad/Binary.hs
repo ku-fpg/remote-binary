@@ -42,20 +42,20 @@ receiveWeakSendAPI (BinaryNatTrans f) (Sync c) = do
                                   return $ runPut (f' r) 
 
 -- ##### Strong Packet ######
---
---sendStrongBinary :: (Binary a, Binary c, BinaryX p) => (SendAPI ~> IO) -> SP.StrongPacket c p a -> IO a
---sendStrongBinary f pkt = do
---                        r <- f (Sync (encodeStrongPacket pkt))
---                        return $ decodeStrongPacketResult pkt r 
---
---receiveStrongSendAPI :: (Binary c, BinaryX p) => BinaryNatTrans (SP.StrongPacket c p)  IO -> (SendAPI ~> IO)
---receiveStrongSendAPI (BinaryNatTrans f) (Sync c) = do
---                                        case decode c of
---                                          (T v ) -> do
---                                                    r <- f v
---                                                    return $ encodeStrongPacketResult v r
---
----- ##### Applicative Packet ######
+
+sendStrongBinary :: (Binary a, Binary c, BinaryQ p) => (SendAPI ~> IO) -> SP.StrongPacket c p a -> IO a
+sendStrongBinary f pkt = do
+                        r <- f (Sync (encodeStrongPacket pkt))
+                        return $ decodeStrongPacketResult pkt r 
+
+receiveStrongSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (SP.StrongPacket c p)  IO -> (SendAPI ~> IO)
+receiveStrongSendAPI (BinaryNatTrans f) (Sync c) = do
+                                        case runGet getQ c of
+                                          (Query f' v ) -> do
+                                                    r <- f v
+                                                    return $ runPut (f' r)
+
+-- ##### Applicative Packet ######
 --
 --sendApplicativeBinary :: (Binary a, Binary c, BinaryX p) => (SendAPI ~> IO) -> AP.ApplicativePacket c p a -> IO a
 --sendApplicativeBinary f pkt = do
