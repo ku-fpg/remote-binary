@@ -187,6 +187,22 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
                      return $ Query (\ (a,b) -> f1 a >> f2 b) (AP.Zip (,) a b)
          3 -> return $ Query (const $ return ()) (AP.Pure ())
 
+  getQT = do
+      i <- get
+      case i :: Word8 of
+         0 -> do
+              c <- get
+              return $ T $ AP.Command c
+         1 ->do 
+                T p <- getQT
+                return $ T $ AP.Procedure $ p
+
+         2 -> do T q1 <- getQT
+                 T q2 <- getQT
+                 return $ T $ AP.Zip (\ a b -> (a,b)) q1 q2
+         3 -> return $ T $ AP.Pure ()
+
+
   interpQ (AP.Command c)   = return ()
   interpQ (AP.Procedure p) = interpQ p
   interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
@@ -270,6 +286,8 @@ class BinaryQ p  where
   putQ    :: p a -> Put     -- encode a query/question
   getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
   interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
+
+  getQT   :: Get (T p)      -- 
 
 -- Artifacts
 
