@@ -50,18 +50,18 @@ dispatchStrongPacket (SP.Procedure Pop)  = do
 
 dispatchStrongPacket (SP.Done) = return () 
 
---dispatchApplicativePacket :: AP.ApplicativePacket Command Procedure a -> IO a
---dispatchApplicativePacket (AP.Command (Push n))   =  print $ "Push " ++ (show n)
---dispatchApplicativePacket (AP.Procedure Pop) = do 
---                                             print $ "Pop"
---                                             return (7 :: Int)
---
---dispatchApplicativePacket (AP.Zip f a b)   = do 
---                                                ra <- dispatchApplicativePacket a
---                                                rb <- dispatchApplicativePacket b 
---                                                return $ f ra rb
---dispatchApplicativePacket (AP.Pure a )     = undefined
---
+dispatchApplicativePacket :: AP.ApplicativePacket Command Procedure a -> IO a
+dispatchApplicativePacket (AP.Command (Push n))   =  print $ "Push " ++ (show n)
+dispatchApplicativePacket (AP.Procedure Pop) = do 
+                                             print $ "Pop"
+                                             return (7 :: Int)
+
+dispatchApplicativePacket (AP.Zip f a b)   = do 
+                                                ra <- dispatchApplicativePacket a
+                                                rb <- dispatchApplicativePacket b 
+                                                return $ f ra rb
+dispatchApplicativePacket (AP.Pure a )     = undefined
+
 
 runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure) IO
 runWeakBinary = BinaryNatTrans dispatchWeakPacket
@@ -69,9 +69,9 @@ runWeakBinary = BinaryNatTrans dispatchWeakPacket
 runStrongBinary :: BinaryNatTrans (SP.StrongPacket Command Procedure) IO
 runStrongBinary = BinaryNatTrans dispatchStrongPacket
 
---runApplicativeBinary :: BinaryNatTrans (AP.ApplicativePacket Command Procedure) IO
---runApplicativeBinary = BinaryNatTrans dispatchApplicativePacket
---
+runApplicativeBinary :: BinaryNatTrans (AP.ApplicativePacket Command Procedure) IO
+runApplicativeBinary = BinaryNatTrans dispatchApplicativePacket
+
 main::IO()
 main = do
         putStrLn "Weak:"
@@ -86,12 +86,13 @@ main = do
         r <- sendStrongBinary f2 (SP.Command (Push 5) (SP.Command (Push 6) (SP.Procedure Pop)) :: SP.StrongPacket Command Procedure Int)
         print r
 
---        putStrLn "Applicative:"
---        let f3 = receiveApplicativeSendAPI runApplicativeBinary
---
---        r1 <- sendApplicativeBinary f3 (AP.Pure (3) :: AP.ApplicativePacket Command Procedure Int)
---        print r1
---        sendApplicativeBinary f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
---        r2 <- sendApplicativeBinary f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
---        print r
---        return ()
+        putStrLn "Applicative:"
+        let f3 = receiveApplicativeSendAPI runApplicativeBinary
+
+        r1 <- sendApplicativeBinary f3 (AP.Pure (3) :: AP.ApplicativePacket Command Procedure Int)
+        print r1
+        sendApplicativeBinary f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
+        r2 <- sendApplicativeBinary f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
+        print r2
+
+        return ()

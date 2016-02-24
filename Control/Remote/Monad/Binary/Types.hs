@@ -166,43 +166,58 @@ decodeStrongPacketResult pkt = runGet (interpQ pkt)
 encodeStrongPacketResult :: (BinaryQ p, Binary a) => SP.StrongPacket c p a ->  a -> ByteString
 encodeStrongPacketResult (SP.Procedure p) = undefined
 
---instance (Binary c, BinaryX p) => Binary (T (SP.StrongPacket c p)) where
---      put (T (SP.Command c cmds)) = do   
---                          put ( 0 :: Word8)
---                          put c
---                          put (T cmds)
---
---      put (T (SP.Procedure proc)) = do 
---                          put ( 1 :: Word8)
---                          encodeProcedure proc
---
---      put (T (SP.Done)) = put ( 2 :: Word8)
---      
---      get = do 
---              i <- get
---              case i :: Word8 of
---                0 -> do a <- get
---                        (T b) <- get
---                        return $ T ( SP.Command a b )
---                1 -> (\(T p ) -> T $ SP.Procedure $ p) <$> get
---                2 -> return $ T SP.Done
---
---
---encodeStrongPacket :: (Binary c, Binary a, BinaryX p) => SP.StrongPacket c p a -> ByteString 
---encodeStrongPacket pkt =encode (T pkt) 
---
---encodeStrongPacketResult :: (BinaryX p, Binary a) => SP.StrongPacket c p a ->  a -> ByteString
---encodeStrongPacketResult (SP.Procedure p)= encodeProcedureResult p
---encodeStrongPacketResult (SP.Command c cmds)= encodeStrongPacketResult cmds
---
---
---decodeStrongPacketResult :: (BinaryX p, Binary a) => SP.StrongPacket c p a -> ByteString -> a
---decodeStrongPacketResult (SP.Procedure p)   = decodeProcedureResult p 
---decodeStrongPacketResult (SP.Command c cmds)= decodeStrongPacketResult cmds 
---decodeStrongPacketResult (SP.Done)          = const ()
---
---
 ---- ############ Applicative Packet #####################
+instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
+  putQ = putApplicativePacket 
+
+  getQ = do
+      i <- get
+      case i :: Word8 of
+         0 -> do
+              c <- get
+              return $ Query put (AP.Command c)
+
+         1 ->do 
+                (Query f p) <- getQ
+                return $ Query f (AP.Procedure p)
+         2 -> do undefined
+--                 (Query f1 a) <- getQ
+--                 (Query f2 b) <- getQ
+--                 return $ Query () (AP.Zip (\ x y -> [runPut (f1 x), runPut (f2 y)])a b)
+                 --TODO This function is to allow a return of a list of bytestrings from server
+--                 return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
+         3 -> undefined 
+
+  interpQ (AP.Command c)   = return ()
+  interpQ (AP.Procedure p) = interpQ p
+  interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
+  interpQ (AP.Pure a)      = return a
+
+
+putApplicativePacket :: (Binary c, BinaryQ p) => AP.ApplicativePacket c p a -> Put
+putApplicativePacket (AP.Command c) = do
+    put (0 :: Word8)
+    put c
+putApplicativePacket (AP.Procedure p) = do
+    put (1 :: Word8)
+    putQ p
+putApplicativePacket (AP.Zip  _ a b) = do
+    put (2 :: Word8)
+    putApplicativePacket a
+    putApplicativePacket b
+putApplicativePacket (AP.Pure _) = do
+    put (3 :: Word8)
+
+          
+encodeApplicativePacket :: (Binary c, Binary a, BinaryQ p) => AP.ApplicativePacket c p a -> ByteString 
+encodeApplicativePacket pkt = runPut (putQ pkt)
+
+encodeApplicativePacketResult :: (BinaryQ p, Binary a) => AP.ApplicativePacket c p a ->  a -> ByteString
+encodeApplicativePacketResult pkt = undefined 
+
+decodeApplicativePacketResult :: (BinaryQ p, Binary a, Binary c) => AP.ApplicativePacket c p a -> ByteString -> a
+decodeApplicativePacketResult pkt = runGet (interpQ pkt)
+--TODO somehow convert ByteString -> to input parameters for f 
 --instance (Binary c, BinaryX p) => Binary (T (AP.ApplicativePacket c p)) where
 --     put ( T (AP.Command c )) = do
 --                           put (0 :: Word8)
@@ -247,59 +262,7 @@ encodeStrongPacketResult (SP.Procedure p) = undefined
 --    
 --     get = undefined
 ---}
-{- 
-
-instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
-  putQ = putApplicativePacket 
-
-putApplicativePacket :: (Binary c, BinaryQ p) => AP.ApplicativePacket c p a -> Put
-putApplicativePacket (AP.Command c) = do
-    put (0 :: Word8)
-    put c
-putApplicativePacket (AP.Procedure p) = do
-    put (1 :: Word8)
-    putQ p
-putApplicativePacket (AP.Zip  _ a b) = do
-    put (2 :: Word8)
-    putApplicativePacket a
-    putApplicativePacket b
-putApplicativePacket (AP.Pure _) = do
-    put (3 :: Word8)
-
-
-instance (Binary c, BinaryGetX p) => BinaryGetX (AP.ApplicativePacket c p) where
-    getQ = do
-         i <- get
-         case i :: Word8 of
-            0 -> do
-                 c <- get
-                 return $ GetX put (AP.Command c)
--}
-{-
-            1 -> (\(T p ) -> T $ AP.Procedure $ p) <$> get
-            2 -> do (T a) <- get
-                    (T b) <- get
-                    --TODO This function is to allow a return of a list of bytestrings from server
-                    return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
-            3 -> undefined 
--}
-{-
-instance (BinaryGetReplyX p) => BinaryGetReplyX (AP.ApplicativePacket c p) where
-  interpQ (AP.Command c)   = return ()
-  interpQ (AP.Procedure p) = interpQ p
-  interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
-  interpQ (AP.Pure a)      = return a
--}
---          
---encodeApplicativePacket :: (Binary c, Binary a, BinaryX p) => AP.ApplicativePacket c p a -> ByteString 
---encodeApplicativePacket pkt = encode (T pkt)
---
---encodeApplicativePacketResult :: (BinaryX p, Binary a) => AP.ApplicativePacket c p a ->  a -> ByteString
---encodeApplicativePacketResult (AP.Procedure p) = encodeProcedureResult p
---
---decodeApplicativePacketResult :: (BinaryX p, Binary a) => AP.ApplicativePacket c p a -> ByteString -> a
---decodeApplicativePacketResult (AP.Procedure p)= decodeProcedureResult p
---decodeApplicativePacketResult (AP.Zip f a b)=  --TODO somehow convert ByteString -> to input parameters for f 
+ 
 
 data Query (p :: * -> *) where
    Query :: (Binary a) => (a -> Put) -> p a -> Query p
