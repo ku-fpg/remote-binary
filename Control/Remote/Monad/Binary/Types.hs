@@ -261,6 +261,14 @@ instance (BinaryGetReplyX p) => BinaryGetReplyX (AP.ApplicativePacket c p) where
 --decodeApplicativePacketResult (AP.Procedure p)= decodeProcedureResult p
 --decodeApplicativePacketResult (AP.Zip f a b)=  --TODO somehow convert ByteString -> to input parameters for f 
 
+data Query (p :: * -> *) where
+   Query :: (a -> Put) -> p a -> Query p
+
+class BinaryQ p  where
+  putQ    :: p a -> Put     -- encode a query/question
+  getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
+  interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
+
 class BinaryPutX p  where
   putX :: p a -> Put
 
