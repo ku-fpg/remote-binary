@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE RankNTypes, TypeSynonymInstances, FlexibleInstances, ConstraintKinds, OverloadedStrings, ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes, TypeSynonymInstances, FlexibleInstances, ConstraintKinds, OverloadedStrings, ExistentialQuantification, InstanceSigs #-}
 
 
 
@@ -78,6 +78,10 @@ data T f where
   T:: (Binary a) => f a -> T f
 
 data BinaryNatTrans f g = BinaryNatTrans (forall a. (Binary a) => f a -> g a)
+
+
+data T' f where
+  T' :: f a -> T' f
 
 -- ############## Weak Packet #######################
 
@@ -155,8 +159,8 @@ instance (Binary c, BinaryX p) => Binary (T (AP.ApplicativePacket c p)) where
      --TODO Encode Zip (Type Errors currently)              
      put ( T (AP.Zip f a b)) = do
                            put (2 :: Word8)
-                           put (T a)
-                           put (T b)
+--                           put (T' a)
+--                           put (T' b)
   
      put ( T (AP.Pure a )) = undefined
     
@@ -170,7 +174,59 @@ instance (Binary c, BinaryX p) => Binary (T (AP.ApplicativePacket c p)) where
                     --TODO This function is to allow a return of a list of bytestrings from server
                     return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
             3 -> undefined 
+{-
+instance (Binary c, BinaryX p) => Binary (T' (AP.ApplicativePacket c p)) where
+     put (T' (AP.Command c )) = do
+                           put (0 :: Word8)
+                           put c
 
+     put (T' p@(AP.Procedure proc)) = put (T p)
+     
+     --TODO Encode Zip (Type Errors currently)              
+     put (T' (AP.Zip f a b)) = do
+                           put (2 :: Word8)
+                           put (T' a)
+                           put (T' b)
+  
+     put (T' (AP.Pure a )) = undefined
+    
+     get = undefined
+-}
+          
+instance (Binary c, BinaryPutX p) => BinaryPutX (AP.ApplicativePacket c p) where
+  putX = putApplicativePacket 
+
+putApplicativePacket :: (Binary c, BinaryPutX p) => AP.ApplicativePacket c p a -> Put
+putApplicativePacket (AP.Command c) = do
+    put (0 :: Word8)
+    put c
+putApplicativePacket (AP.Procedure p) = do
+    put (1 :: Word8)
+    putX p
+putApplicativePacket (AP.Zip  _ a b) = do
+    put (2 :: Word8)
+    putApplicativePacket a
+    putApplicativePacket b
+putApplicativePacket (AP.Pure _) = do
+    put (3 :: Word8)
+
+
+instance (Binary c, BinaryGetX p) => BinaryGetX (AP.ApplicativePacket c p) where
+    getX = do
+         i <- get
+         case i :: Word8 of
+            0 -> do
+                 c <- get
+                 return $ GetX put (AP.Command c)
+{-
+            1 -> (\(T p ) -> T $ AP.Procedure $ p) <$> get
+            2 -> do (T a) <- get
+                    (T b) <- get
+                    --TODO This function is to allow a return of a list of bytestrings from server
+                    return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
+            3 -> undefined 
+-}
+          
 encodeApplicativePacket :: (Binary c, Binary a, BinaryX p) => AP.ApplicativePacket c p a -> ByteString 
 encodeApplicativePacket pkt = encode (T pkt)
 
@@ -181,6 +237,14 @@ decodeApplicativePacketResult :: (BinaryX p, Binary a) => AP.ApplicativePacket c
 decodeApplicativePacketResult (AP.Procedure p)= decodeProcedureResult p
 --decodeApplicativePacketResult (AP.Zip f a b)=  --TODO somehow convert ByteString -> to input parameters for f 
 
+class BinaryPutX p  where
+  putX :: p a -> Put
+
+data GetX (p :: * -> *) where
+   GetX :: (a -> Put) -> p a -> GetX p
+
+class BinaryGetX p  where
+  getX :: Get (GetX p)
 
 
 class (Binary (T p)) => BinaryX p  where
