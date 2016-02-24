@@ -180,13 +180,12 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
          1 ->do 
                 (Query f p) <- getQ
                 return $ Query f (AP.Procedure p)
-         2 -> do undefined
---                 (Query f1 a) <- getQ
---                 (Query f2 b) <- getQ
---                 return $ Query () (AP.Zip (\ x y -> [runPut (f1 x), runPut (f2 y)])a b)
-                 --TODO This function is to allow a return of a list of bytestrings from server
---                 return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
-         3 -> undefined 
+         2 -> do q1 <- getQ
+                 q2 <- getQ
+                 case (q1,q2) of
+                   (Query f1 a, Query f2 b) ->
+                     return $ Query (\ (a,b) -> f1 a >> f2 b) (AP.Zip (,) a b)
+         3 -> return $ Query (const $ return ()) (AP.Pure ())
 
   interpQ (AP.Command c)   = return ()
   interpQ (AP.Procedure p) = interpQ p
