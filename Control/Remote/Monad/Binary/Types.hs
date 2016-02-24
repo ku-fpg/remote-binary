@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE RankNTypes, TypeSynonymInstances, FlexibleInstances, ConstraintKinds, OverloadedStrings, ExistentialQuantification #-}
@@ -31,6 +32,9 @@
  , encodeStrongPacket
  , decodeStrongPacketResult
  , encodeStrongPacketResult
+ , encodeApplicativePacket
+ , decodeApplicativePacketResult
+ , encodeApplicativePacketResult
  , SendAPI(..)
  , T(..)
  ) where
@@ -148,18 +152,23 @@ instance (Binary c, BinaryX p) => Binary (T (AP.ApplicativePacket c p)) where
      put ( T (AP.Procedure proc )) = do
                            put (1 :: Word8)
                            encodeProcedure proc
-                           
-     put ( T (AP.Zip f a b)) = undefined
-
-     put ( T (AP.Pure a )) = do
-                           put (3 :: Word8)
+     --TODO Encode Zip (Type Errors currently)              
+     put ( T (AP.Zip f a b)) = do
+                           put (2 :: Word8)
+                           put (T a)
+                           put (T b)
+  
+     put ( T (AP.Pure a )) = undefined
     
      get = do
          i <- get
          case i :: Word8 of
             0 -> (T . AP.Command) <$> get
             1 -> (\(T p ) -> T $ AP.Procedure $ p) <$> get
-            2 -> undefined
+            2 -> do (T a) <- get
+                    (T b) <- get
+                    --TODO This function is to allow a return of a list of bytestrings from server
+                    return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
             3 -> undefined 
 
 encodeApplicativePacket :: (Binary c, Binary a, BinaryX p) => AP.ApplicativePacket c p a -> ByteString 
@@ -170,6 +179,7 @@ encodeApplicativePacketResult (AP.Procedure p) = encodeProcedureResult p
 
 decodeApplicativePacketResult :: (BinaryX p, Binary a) => AP.ApplicativePacket c p a -> ByteString -> a
 decodeApplicativePacketResult (AP.Procedure p)= decodeProcedureResult p
+--decodeApplicativePacketResult (AP.Zip f a b)=  --TODO somehow convert ByteString -> to input parameters for f 
 
 
 
@@ -182,8 +192,6 @@ class (Binary (T p)) => BinaryX p  where
 
   encodeProcedure:: (BinaryX p, Binary a) => p a -> Put
   encodeProcedure p = put (T p)
-
-
 
 
 -- Artifacts

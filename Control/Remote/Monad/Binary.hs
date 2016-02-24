@@ -54,10 +54,23 @@ receiveStrongSendAPI (BinaryNatTrans f) (Sync c) = do
                                                     return $ encodeStrongPacketResult v r
 
 -- ##### Applicative Packet ######
-{-
+
 sendApplicativeBinary :: (Binary a, Binary c, BinaryX p) => (SendAPI ~> IO) -> AP.ApplicativePacket c p a -> IO a
-sendApplicativeBinary f pkt = undefined 
+sendApplicativeBinary f pkt = do
+                            case pkt of
+                              (AP.Pure a)    -> return a
+   {-TODO                           (AP.Zip f2 a b) -> do 
+                                                rs <- f (Sync (encodeApplicativePacket pkt))
+                                                return $ foldl1 f2 rs 
+   -} 
+                              otherwise      -> do 
+                                       r <- f (Sync (encodeApplicativePacket pkt))
+                                       return $ decodeApplicativePacketResult pkt r
 
 receiveApplicativeSendAPI :: (Binary c, BinaryX p) => BinaryNatTrans (AP.ApplicativePacket c p)  IO -> (SendAPI ~> IO)
-receiveApplicativeSendAPI (BinaryNatTrans f) (Sync c) = undefined 
--}
+receiveApplicativeSendAPI (BinaryNatTrans f) (Sync c) = do
+                                             case decode c of
+                                                (T v ) -> do
+                                                       r <- f v
+                                                       return $ encodeApplicativePacketResult v r
+
