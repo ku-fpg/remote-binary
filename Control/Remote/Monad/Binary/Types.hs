@@ -226,6 +226,13 @@ instance (Binary c, BinaryGetX p) => BinaryGetX (AP.ApplicativePacket c p) where
                     return $ T (AP.Zip (\ x y -> [encode x, encode y] ) a b)
             3 -> undefined 
 -}
+
+instance (BinaryGetReplyX p) => BinaryGetReplyX (AP.ApplicativePacket c p) where
+  getReplyX (AP.Command c)   = return ()
+  getReplyX (AP.Procedure p) = getReplyX p
+  getReplyX (AP.Zip f x y)   = f <$> getReplyX x <*> getReplyX y
+  getReplyX (AP.Pure a)      = return a
+
           
 encodeApplicativePacket :: (Binary c, Binary a, BinaryX p) => AP.ApplicativePacket c p a -> ByteString 
 encodeApplicativePacket pkt = encode (T pkt)
@@ -246,6 +253,8 @@ data GetX (p :: * -> *) where
 class BinaryGetX p  where
   getX :: Get (GetX p)
 
+class BinaryGetReplyX p  where
+  getReplyX :: p a -> Get a
 
 class (Binary (T p)) => BinaryX p  where
   decodeProcedureResult :: (Binary a) =>  p a -> ByteString -> a
