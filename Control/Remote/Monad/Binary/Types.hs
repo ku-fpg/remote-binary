@@ -78,6 +78,22 @@ transportSendAPI f (Sync c) =  do
                                                   let reply_data = encode a
                                                   let reply_value = decode reply_data
                                                   return reply_value
+
+
+-------------
+
+data Query (p :: * -> *) where
+   Query :: (Binary a) => (a -> Put) -> p a -> Query p
+
+class BinaryQ p  where
+  putQ    :: p a -> Put     -- encode a query/question
+  getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
+  interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
+
+  getQT   :: Get (T p)      -- 
+
+-------------
+
 data T f where
   T:: (Binary a) => f a -> T f
 
@@ -278,16 +294,6 @@ decodeApplicativePacketResult pkt = runGet (interpQ pkt)
 --     get = undefined
 ---}
  
-
-data Query (p :: * -> *) where
-   Query :: (Binary a) => (a -> Put) -> p a -> Query p
-
-class BinaryQ p  where
-  putQ    :: p a -> Put     -- encode a query/question
-  getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
-  interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
-
-  getQT   :: Get (T p)      -- 
 
 -- Artifacts
 
