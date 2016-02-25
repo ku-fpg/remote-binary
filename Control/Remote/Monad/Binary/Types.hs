@@ -82,15 +82,13 @@ transportSendAPI f (Sync c) =  do
 
 -------------
 
-data Query (p :: * -> *) where
-   Query :: (Binary a) => (a -> Put) -> p a -> Query p
+data RemotePacket (p :: * -> *) where
+   RemotePacket :: (Binary a) => p a -> RemotePacket p
 
 class BinaryQ p  where
-  putQ    :: p a -> Put     -- encode a query/question
-  getQ    :: Get (Query p)  -- decode to the query, which contains a way of encoding the answer
-  interpQ :: p a -> Get a   -- interprete the answer, in the context of the original query (type).
-
-  getQT   :: Get (T p)      -- 
+  putQ    :: p a -> Put            -- ^ encode a query/question as a packet
+  getQ    :: Get (RemotePacket p)  -- ^ decode to the packet, which contains a way of encoding the answer
+  interpQ :: p a -> Get a          -- ^ interprete the answer, in the context of the original query (type).
 
 -------------
 
@@ -113,10 +111,10 @@ instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
        case i :: Word8 of
           0 -> do 
                 c <- get
-                return $ Query put (WP.Command c)
+                return $ RemotePacket $ WP.Command c
           1 -> do 
-                (Query f p) <- getQ
-                return $ Query f (WP.Procedure p)
+                RemotePacket p <- getQ
+                return $ RemotePacket $ WP.Procedure $ p
 
   interpQ (WP.Command c)   = return ()
   interpQ (WP.Procedure p) = interpQ p
@@ -151,13 +149,13 @@ instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
        case i :: Word8 of
           0 -> do 
                 c <- get
-                (Query f cmds) <- getQ
-                return $ Query f (SP.Command c cmds)
+                RemotePacket cmds <- getQ
+                return $ RemotePacket $ SP.Command c cmds
           1 -> do 
-                (Query f p) <- getQ
-                return $ Query f (SP.Procedure p)
+                RemotePacket p <- getQ
+                return $ RemotePacket $ SP.Procedure p
           2 -> do
-                return $ Query put (SP.Done)
+                return $ RemotePacket $ SP.Done
 
   interpQ (SP.Command c cmds)   = interpQ cmds
   interpQ (SP.Procedure p) = interpQ p
@@ -191,32 +189,15 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
       case i :: Word8 of
          0 -> do
               c <- get
-              return $ Query put (AP.Command c)
-
+              return $ RemotePacket $ AP.Command c
          1 ->do 
-                (Query f p) <- getQ
-                return $ Query f (AP.Procedure p)
-         2 -> do q1 <- getQ
-                 q2 <- getQ
-                 case (q1,q2) of
-                   (Query f1 a, Query f2 b) ->
-                     return $ Query (\ (a,b) -> f1 a >> f2 b) (AP.Zip (,) a b)
-         3 -> return $ Query (const $ return ()) (AP.Pure ())
+                RemotePacket p <- getQ
+                return $ RemotePacket $ AP.Procedure $ p
 
-  getQT = do
-      i <- get
-      case i :: Word8 of
-         0 -> do
-              c <- get
-              return $ T $ AP.Command c
-         1 ->do 
-                T p <- getQT
-                return $ T $ AP.Procedure $ p
-
-         2 -> do T q1 <- getQT
-                 T q2 <- getQT
-                 return $ T $ AP.Zip (\ a b -> (a,b)) q1 q2
-         3 -> return $ T $ AP.Pure ()
+         2 -> do RemotePacket q1 <- getQ
+                 RemotePacket q2 <- getQ
+                 return $ RemotePacket $ AP.Zip (\ a b -> (a,b)) q1 q2
+         3 -> return $ RemotePacket $ AP.Pure ()
 
 
   interpQ (AP.Command c)   = return ()

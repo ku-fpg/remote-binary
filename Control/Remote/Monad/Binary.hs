@@ -37,11 +37,12 @@ sendWeakBinary f pkt = do
 receiveWeakSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (WP.WeakPacket c p)  IO -> (SendAPI ~> IO)
 receiveWeakSendAPI (BinaryNatTrans f) (Sync c) = do 
                      case runGet getQ c of 
-                       (Query f' v) -> do  
+                       (RemotePacket v) -> do 
                                   r  <- f v 
-                                  return $ runPut (f' r) 
+                                  return $ encode r
 
--- ##### Strong Packet ######
+{-
+                                  -- ##### Strong Packet ######
 
 sendStrongBinary :: (Binary a, Binary c, BinaryQ p) => (SendAPI ~> IO) -> SP.StrongPacket c p a -> IO a
 sendStrongBinary f pkt = do
@@ -51,9 +52,9 @@ sendStrongBinary f pkt = do
 receiveStrongSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (SP.StrongPacket c p)  IO -> (SendAPI ~> IO)
 receiveStrongSendAPI (BinaryNatTrans f) (Sync c) = do
                                         case runGet getQ c of
-                                          (Query f' v ) -> do
+                                          (RemotePacket v ) -> do
                                                     r <- f v
-                                                    return $ runPut (f' r)
+                                                    return $ runPut r
 
 -- ##### Applicative Packet ######
 
@@ -72,7 +73,8 @@ sendApplicativeBinary f pkt = do
 receiveApplicativeSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (AP.ApplicativePacket c p)  IO -> (SendAPI ~> IO)
 receiveApplicativeSendAPI (BinaryNatTrans f) (Sync c) = do
                                              case runGet getQ c of
-                                                (Query f' v ) -> do
+                                                (RemotePacket v ) -> do
                                                        r <- f v
-                                                       return $ runPut (f' r)
+                                                       return $ runPut r
 
+-}
