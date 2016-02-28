@@ -13,7 +13,11 @@ Stability:   Alpha
 Portability: GHC
 -}
 
-module Control.Remote.Monad.Binary  where
+module Control.Remote.Monad.Binary
+    ( sendWeakBinary
+    , receiveWeakSendAPI
+    , SendAPI(..)
+    ) where
 import           Control.Monad (void)
 import           Control.Natural
 import qualified Control.Remote.Monad.Packet.Weak as WP
