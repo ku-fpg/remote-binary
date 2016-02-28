@@ -15,13 +15,17 @@ Portability: GHC
 
 module Control.Remote.Monad.Transport  where
 
-import           Control.Remote.Monad.Binary.Types (SendAPI(..))
+
+
+import           Control.Remote.Monad.Binary (SendAPI(..))
 import           Control.Natural
+
 import           Data.Binary
 import           Data.Binary.Get (runGet)
 import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as BS
 
+import           Network.Transport
 
 transportClient :: Transport -> IO (SendAPI :~> IO)
 transportClient = undefined
