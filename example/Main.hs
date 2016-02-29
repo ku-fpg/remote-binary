@@ -1,6 +1,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeOperators #-}
  
 import           Control.Natural
 import           Control.Remote.Monad
@@ -27,7 +28,7 @@ data Procedure :: * -> * where
 instance BinaryQ Procedure where
    getQ = do i <- get
              case i :: Word8 of
-               0 -> return $ Query put Pop
+               0 -> return $ RemotePacket Pop
    putQ (Pop)= put (0 :: Word8) 
 
    interpQ (Pop) = get
@@ -60,11 +61,11 @@ dispatchApplicativePacket (AP.Zip f a b)   = do
                                                 ra <- dispatchApplicativePacket a
                                                 rb <- dispatchApplicativePacket b 
                                                 return $ f ra rb
-dispatchApplicativePacket (AP.Pure a )     = undefined
+dispatchApplicativePacket (AP.Pure a)     = return a
 
 
-runWeakBinary :: BinaryNatTrans (WP.WeakPacket Command Procedure) IO
-runWeakBinary = BinaryNatTrans dispatchWeakPacket
+runWeakBinary :: WP.WeakPacket Command Procedure :~> IO
+runWeakBinary =  nat dispatchWeakPacket
 
 runStrongBinary :: BinaryNatTrans (SP.StrongPacket Command Procedure) IO
 runStrongBinary = BinaryNatTrans dispatchStrongPacket
@@ -72,12 +73,15 @@ runStrongBinary = BinaryNatTrans dispatchStrongPacket
 runApplicativeBinary :: BinaryNatTrans (AP.ApplicativePacket Command Procedure) IO
 runApplicativeBinary = BinaryNatTrans dispatchApplicativePacket
 
+add :: Int -> Int -> Int
+add x y = x + y
+
 main::IO()
 main = do
         putStrLn "Weak:"
-        let f1 = receiveWeakSendAPI runWeakBinary
-        sendWeakBinary f1 (WP.Command (Push 9):: WP.WeakPacket Command Procedure ())
-        r <- sendWeakBinary f1 (WP.Procedure (Pop):: WP.WeakPacket Command Procedure Int)
+        let f1 = receiveSendAPI runWeakBinary
+        sendBinaryQ f1 (WP.Command (Push 9):: WP.WeakPacket Command Procedure ())
+        r <- sendBinaryQ f1 (WP.Procedure (Pop):: WP.WeakPacket Command Procedure Int)
         print r
  
         putStrLn "Strong:"
@@ -94,5 +98,7 @@ main = do
         sendApplicativeBinary f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
         r2 <- sendApplicativeBinary f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
         print r2
+        r3 <- sendApplicativeBinary f3 (AP.Zip (add) (AP.Procedure (Pop)) (AP.Procedure (Pop)) :: AP.ApplicativePacket Command Procedure Int)
+        print r3
 
         return ()

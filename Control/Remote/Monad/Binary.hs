@@ -14,8 +14,12 @@ Portability: GHC
 -}
 
 module Control.Remote.Monad.Binary
-    ( sendWeakBinary
-    , receiveWeakSendAPI
+    ( sendBinaryQ
+    , receiveSendAPI
+    , sendStrongBinary
+    , receiveStrongSendAPI
+    , sendApplicativeBinary
+    , receiveApplicativeSendAPI
     , SendAPI(..)
     ) where
 import           Control.Monad (void)
@@ -31,21 +35,21 @@ import qualified Data.ByteString.Lazy as BS
 
 
 -- ##### Weak Packet  ######
-sendWeakBinary :: (Binary a, Binary c,BinaryQ p) => (SendAPI ~> IO) -> WP.WeakPacket c p a -> IO a
-sendWeakBinary f pkt = do 
-                        r <- f (Sync (encodeWeakPacket  pkt))
-                        return $ decodeWeakPacketResult pkt r 
+sendBinaryQ :: (Binary a, BinaryQ f) => (SendAPI ~> IO) -> f a -> IO a
+sendBinaryQ f pkt = do 
+                        r <- f (Sync (encodePacket  pkt))
+                        return $ decodePacketResult pkt r 
                                              
 
 
-receiveWeakSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (WP.WeakPacket c p)  IO -> (SendAPI ~> IO)
-receiveWeakSendAPI (BinaryNatTrans f) (Sync c) = do 
+receiveSendAPI :: (BinaryQ f) => (f :~> IO) -> (SendAPI ~> IO)
+receiveSendAPI (Nat f) (Sync c) = do 
                      case runGet getQ c of 
                        (RemotePacket v) -> do 
                                   r  <- f v 
                                   return $ encode r
 
-{-
+
                                   -- ##### Strong Packet ######
 
 sendStrongBinary :: (Binary a, Binary c, BinaryQ p) => (SendAPI ~> IO) -> SP.StrongPacket c p a -> IO a
@@ -57,8 +61,8 @@ receiveStrongSendAPI :: (Binary c, BinaryQ p) => BinaryNatTrans (SP.StrongPacket
 receiveStrongSendAPI (BinaryNatTrans f) (Sync c) = do
                                         case runGet getQ c of
                                           (RemotePacket v ) -> do
-                                                    r <- f v
-                                                    return $ runPut r
+                                                    r <- f v 
+                                                    return $ encode r
 
 -- ##### Applicative Packet ######
 
@@ -66,10 +70,10 @@ sendApplicativeBinary :: (Binary a, Binary c, BinaryQ p) => (SendAPI ~> IO) -> A
 sendApplicativeBinary f pkt = do
                             case pkt of
                               (AP.Pure a)    -> return a
-   {-TODO                           (AP.Zip f2 a b) -> do 
+                            {-  (AP.Zip f2 a b) -> do 
                                                rs <- f (Sync (encodeApplicativePacket pkt))
-                                                return $ foldl1 f2 rs 
-   -} 
+                                               return  $ (\(a, b) -> f2 a b) rs 
+    -}
                               otherwise      -> do 
                                        r <- f (Sync (encodeApplicativePacket pkt))
                                        return $ decodeApplicativePacketResult pkt r
@@ -79,6 +83,6 @@ receiveApplicativeSendAPI (BinaryNatTrans f) (Sync c) = do
                                              case runGet getQ c of
                                                 (RemotePacket v ) -> do
                                                        r <- f v
-                                                       return $ runPut r
+                                                       return $ encode r
 
--}
+

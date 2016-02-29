@@ -136,8 +136,8 @@ encodeWeakPacket pkt = runPut (putQ pkt)
 decodeWeakPacketResult :: (BinaryQ p, Binary c, Binary a) => WP.WeakPacket c p a -> ByteString -> a
 decodeWeakPacketResult pkt = runGet (interpQ pkt)
 
-encodeWeakPacketResult :: (BinaryQ p, Binary a) => WP.WeakPacket c p a ->  a -> ByteString
-encodeWeakPacketResult (WP.Procedure p) = undefined
+--encodeWeakPacketResult :: (BinaryQ p, Binary a) => WP.WeakPacket c p a ->  a -> ByteString
+--encodeWeakPacketResult (WP.Procedure p) = undefined
 
 ---- ############ Strong Packet ##########################
 
@@ -177,8 +177,8 @@ encodeStrongPacket pkt = runPut (putQ pkt)
 decodeStrongPacketResult :: (BinaryQ p, Binary c, Binary a) => SP.StrongPacket c p a -> ByteString -> a
 decodeStrongPacketResult pkt = runGet (interpQ pkt)
 
-encodeStrongPacketResult :: (BinaryQ p, Binary a) => SP.StrongPacket c p a ->  a -> ByteString
-encodeStrongPacketResult (SP.Procedure p) = undefined
+--encodeStrongPacketResult :: (BinaryQ p, Binary a) => SP.StrongPacket c p a ->  a -> ByteString
+--encodeStrongPacketResult (SP.Procedure p) = undefined
 
 ---- ############ Applicative Packet #####################
 instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
@@ -224,11 +224,17 @@ putApplicativePacket (AP.Pure _) = do
 encodeApplicativePacket :: (Binary c, Binary a, BinaryQ p) => AP.ApplicativePacket c p a -> ByteString 
 encodeApplicativePacket pkt = runPut (putQ pkt)
 
-encodeApplicativePacketResult :: (BinaryQ p, Binary a) => AP.ApplicativePacket c p a ->  a -> ByteString
-encodeApplicativePacketResult pkt = undefined 
+--encodeApplicativePacketResult :: (BinaryQ p, Binary a) => AP.ApplicativePacket c p a ->  a -> ByteString
+--encodeApplicativePacketResult pkt = undefined 
 
 decodeApplicativePacketResult :: (BinaryQ p, Binary a, Binary c) => AP.ApplicativePacket c p a -> ByteString -> a
 decodeApplicativePacketResult pkt = runGet (interpQ pkt)
+
+encodePacket :: (BinaryQ f) =>  f a -> ByteString 
+encodePacket pkt = runPut (putQ pkt)
+
+decodePacketResult :: (BinaryQ f) => f a -> ByteString -> a
+decodePacketResult pkt = runGet (interpQ pkt)
 --TODO somehow convert ByteString -> to input parameters for f 
 --instance (Binary c, BinaryX p) => Binary (T (AP.ApplicativePacket c p)) where
 --     put ( T (AP.Command c )) = do
