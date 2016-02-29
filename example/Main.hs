@@ -67,11 +67,11 @@ dispatchApplicativePacket (AP.Pure a)     = return a
 runWeakBinary :: WP.WeakPacket Command Procedure :~> IO
 runWeakBinary =  nat dispatchWeakPacket
 
-runStrongBinary :: BinaryNatTrans (SP.StrongPacket Command Procedure) IO
-runStrongBinary = BinaryNatTrans dispatchStrongPacket
+runStrongBinary :: SP.StrongPacket Command Procedure :~> IO
+runStrongBinary = nat dispatchStrongPacket
 
-runApplicativeBinary :: BinaryNatTrans (AP.ApplicativePacket Command Procedure) IO
-runApplicativeBinary = BinaryNatTrans dispatchApplicativePacket
+runApplicativeBinary :: AP.ApplicativePacket Command Procedure :~> IO
+runApplicativeBinary = nat dispatchApplicativePacket
 
 add :: Int -> Int -> Int
 add x y = x + y
@@ -85,20 +85,20 @@ main = do
         print r
  
         putStrLn "Strong:"
-        let f2 = receiveStrongSendAPI runStrongBinary
-        sendStrongBinary f2 (SP.Command (Push 8) (SP.Command (Push 7) (SP.Done)) :: SP.StrongPacket Command Procedure ())
-        r <- sendStrongBinary f2 (SP.Command (Push 5) (SP.Command (Push 6) (SP.Procedure Pop)) :: SP.StrongPacket Command Procedure Int)
+        let f2 = receiveSendAPI runStrongBinary
+        sendBinaryQ f2 (SP.Command (Push 8) (SP.Command (Push 7) (SP.Done)) :: SP.StrongPacket Command Procedure ())
+        r <- sendBinaryQ f2 (SP.Command (Push 5) (SP.Command (Push 6) (SP.Procedure Pop)) :: SP.StrongPacket Command Procedure Int)
         print r
 
         putStrLn "Applicative:"
-        let f3 = receiveApplicativeSendAPI runApplicativeBinary
+        let f3 = receiveSendAPI runApplicativeBinary
 
-        r1 <- sendApplicativeBinary f3 (AP.Pure (3) :: AP.ApplicativePacket Command Procedure Int)
+        r1 <- sendBinaryQ f3 (AP.Pure (3) :: AP.ApplicativePacket Command Procedure Int)
         print r1
-        sendApplicativeBinary f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
-        r2 <- sendApplicativeBinary f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
+        sendBinaryQ f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
+        r2 <- sendBinaryQ f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
         print r2
-        r3 <- sendApplicativeBinary f3 (AP.Zip (add) (AP.Procedure (Pop)) (AP.Procedure (Pop)) :: AP.ApplicativePacket Command Procedure Int)
+        r3 <- sendBinaryQ f3 (AP.Zip (add) (AP.Procedure (Pop)) (AP.Procedure (Pop)) :: AP.ApplicativePacket Command Procedure Int)
         print r3
 
         return ()
