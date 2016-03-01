@@ -14,7 +14,11 @@ Stability:   Alpha
 Portability: GHC
 -}
 
-module Control.Remote.Monad.Transport  where
+module Control.Remote.Monad.Transport 
+  ( transportClient
+  , transportServer
+  , SendAPI(..)
+  ) where
 
 
 import           Control.Concurrent (forkIO,threadDelay)
