@@ -17,7 +17,6 @@ Portability: GHC
 module Control.Remote.Monad.Transport 
   ( transportClient
   , transportServer
-  , SendAPI(..)
   ) where
 
 

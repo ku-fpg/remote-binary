@@ -1,5 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+
 
 {-|                                             
  - Module:      Control.Remote.Monad.Binary.Types 
@@ -16,6 +18,7 @@
    encodePacket
  , decodePacketResult
  , BinaryQ(..)
+ , Fmap(..)
  , RemotePacket(..)
  , SendAPI(..)
  )
@@ -36,11 +39,18 @@ data SendAPI :: * -> * where
     Sync  :: ByteString -> SendAPI ByteString
 
 data RemotePacket (p :: * -> *) where
-   RemotePacket :: (Binary a) => p a -> RemotePacket p
+   RemotePacket ::(Binary a) => p a  -> RemotePacket p
+
+data Fmap f a where
+   Fmap :: (a -> b) -> f a -> Fmap f b
+
+instance Functor (Fmap f) where
+  fmap f (Fmap g h) = Fmap (f . g) h 
+
 
 class BinaryQ p  where
   putQ    :: p a -> Put            -- ^ encode a query/question as a packet
-  getQ    :: Get (RemotePacket p)  -- ^ decode to the packet, which contains a way of encoding the answer
+  getQ    :: Get (Fmap p Put)  -- ^ decode to the packet, which contains a way of encoding the answer
   interpQ :: p a -> Get a          -- ^ interprete the answer, in the context of the original query (type).
 
 -------------
@@ -54,10 +64,10 @@ instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
        case i :: Word8 of
           0 -> do 
                 c <- get
-                return $ RemotePacket $ WP.Command c
+                return $ Fmap (\() -> return ()) (WP.Command c)
           1 -> do 
-                RemotePacket p <- getQ
-                return $ RemotePacket $ WP.Procedure $ p
+                (Fmap f p) <- getQ
+                return $ Fmap f (WP.Procedure  p)
 
   interpQ (WP.Command c)   = return ()
   interpQ (WP.Procedure p) = interpQ p
@@ -82,13 +92,13 @@ instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
        case i :: Word8 of
           0 -> do 
                 c <- get
-                RemotePacket cmds <- getQ
-                return $ RemotePacket $ SP.Command c cmds
+                Fmap f cmds <- getQ
+                return $ Fmap f $ SP.Command c cmds
           1 -> do 
-                RemotePacket p <- getQ
-                return $ RemotePacket $ SP.Procedure p
+                Fmap f p <- getQ
+                return $ Fmap  f $ SP.Procedure p
           2 -> do
-                return $ RemotePacket $ SP.Done
+                return $ Fmap (\() -> return ()) $ SP.Done
 
   interpQ (SP.Command c cmds)   = interpQ cmds
   interpQ (SP.Procedure p) = interpQ p
@@ -113,15 +123,15 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
       case i :: Word8 of
          0 -> do
               c <- get
-              return $ RemotePacket $ AP.Command c
+              return $ Fmap (\()-> return ()) $ AP.Command c
          1 ->do 
-                RemotePacket p <- getQ
-                return $ RemotePacket $ AP.Procedure $ p
+                Fmap f p <- getQ
+                return $Fmap f $ AP.Procedure $ p
 
-         2 -> do RemotePacket q1 <- getQ
-                 RemotePacket q2 <- getQ
-                 return $ RemotePacket $ AP.Zip (\ a b -> (a,b)) q1 q2
-         3 -> return $ RemotePacket $ AP.Pure ()
+         2 -> do Fmap f1 q1 <- getQ
+                 Fmap f2 q2 <- getQ
+                 return $ Fmap (\(a,b)-> f1 a >> f2 b )$ AP.Zip (\ a b -> (a,b)) q1 q2
+         3 -> return $ Fmap (\()-> return ()) $ AP.Pure ()
 
 
   interpQ (AP.Command c)   = return ()

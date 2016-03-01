@@ -8,10 +8,12 @@ import           Control.Remote.Monad
 import qualified Control.Remote.Monad.Packet.Weak as WP
 import qualified Control.Remote.Monad.Packet.Strong as SP
 import qualified Control.Remote.Monad.Packet.Applicative as AP
-import           Control.Remote.Monad.Binary.Types
 import           Control.Remote.Monad.Binary
 import           Data.Binary
 import qualified Data.ByteString.Lazy as BS
+import           Control.Remote.Monad.Transport
+import           Network.Transport  hiding (send)
+import           Network.Transport.TCP
 
 
 data Command :: * where
@@ -28,11 +30,20 @@ data Procedure :: * -> * where
 instance BinaryQ Procedure where
    getQ = do i <- get
              case i :: Word8 of
-               0 -> return $ RemotePacket Pop
+               0 -> return $ Fmap put Pop
    putQ (Pop)= put (0 :: Word8) 
 
    interpQ (Pop) = get
 
+
+
+
+
+push :: Int -> RemoteMonad Command Procedure ()
+push n = command $ Push n
+
+pop :: RemoteMonad Command Procedure Int
+pop = procedure $ Pop
 
 
 dispatchWeakPacket :: WP.WeakPacket Command Procedure a -> IO a
@@ -64,7 +75,7 @@ dispatchApplicativePacket (AP.Zip f a b)   = do
 dispatchApplicativePacket (AP.Pure a)     = return a
 
 
-runWeakBinary :: WP.WeakPacket Command Procedure :~> IO
+runWeakBinary ::  WP.WeakPacket Command Procedure :~> IO
 runWeakBinary =  nat dispatchWeakPacket
 
 runStrongBinary :: SP.StrongPacket Command Procedure :~> IO
@@ -76,29 +87,57 @@ runApplicativeBinary = nat dispatchApplicativePacket
 add :: Int -> Int -> Int
 add x y = x + y
 
+echoServer ::IO()
+echoServer = do
+       Right transport <- createTransport "localhost" "30179" defaultTCPParameters
+       transportServer transport $ server $ nat dispatchApplicativePacket
+       return ()
+
+
+
 main::IO()
 main = do
+        Right transport <- createTransport "localhost" "30178" defaultTCPParameters
+        Nat f <- transportClient transport $ encodeEndPointAddress "localhost" "30179" 0
+        let f1 = monadClient f
+        r<- send f1 $ push 9 
+        print r
+        r<- send f1 $ pop 
+{-
+
         putStrLn "Weak:"
-        let f1 = receiveSendAPI runWeakBinary
-        sendBinaryQ f1 (WP.Command (Push 9):: WP.WeakPacket Command Procedure ())
-        r <- sendBinaryQ f1 (WP.Procedure (Pop):: WP.WeakPacket Command Procedure Int)
+        let f1 = weakSession runWeakBinary
+        r <- send f1 $ do
+                      push 9
+                      pop
         print r
  
         putStrLn "Strong:"
-        let f2 = receiveSendAPI runStrongBinary
-        sendBinaryQ f2 (SP.Command (Push 8) (SP.Command (Push 7) (SP.Done)) :: SP.StrongPacket Command Procedure ())
-        r <- sendBinaryQ f2 (SP.Command (Push 5) (SP.Command (Push 6) (SP.Procedure Pop)) :: SP.StrongPacket Command Procedure Int)
+        let f2 = strongSession runStrongBinary
+        send f2 $ do
+                    push 8
+                    push 9
+        r <- send f2 $ do 
+                    push 5
+                    push 6
+                    pop
         print r
 
         putStrLn "Applicative:"
-        let f3 = receiveSendAPI runApplicativeBinary
+        let f3 = applicativeSession runApplicativeBinary
 
-        r1 <- sendBinaryQ f3 (AP.Pure (3) :: AP.ApplicativePacket Command Procedure Int)
+        r1 <- send f3 $ do
+                 return 3
         print r1
-        sendBinaryQ f3 (AP.Command (Push 8) :: AP.ApplicativePacket Command Procedure ())
-        r2 <- sendBinaryQ f3 (AP.Procedure (Pop) :: AP.ApplicativePacket Command Procedure Int)
+        send f3 $ do
+                  push 8
+        r2 <- send f3 pop
         print r2
-        r3 <- sendBinaryQ f3 (AP.Zip (add) (AP.Procedure (Pop)) (AP.Procedure (Pop)) :: AP.ApplicativePacket Command Procedure Int)
+        r3 <- send f3$ do
+                        r1 <- add <$> pop <*> pop
+                        r2 <- add <$> pure 1 <*> pop
+                        r3 <- add <$> pure 5 <*> pure 5
+                        return (r1,r2,r3)
         print r3
-
+-}
         return ()
