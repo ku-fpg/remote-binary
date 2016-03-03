@@ -68,8 +68,9 @@ instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
           1 -> do 
                 (Fmap f p) <- getQ
                 return $ Fmap f (WP.Procedure  p)
+          _ -> error "ERROR: function getQ unable to parse WeakPacket"
 
-  interpQ (WP.Command c)   = return ()
+  interpQ (WP.Command _c)   = return ()
   interpQ (WP.Procedure p) = interpQ p
 
 
@@ -97,11 +98,12 @@ instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
           1 -> do 
                 Fmap f p <- getQ
                 return $ Fmap  f $ SP.Procedure p
-          2 -> do
-                return $ Fmap (\() -> return ()) $ SP.Done
+          2 -> return $ Fmap (\() -> return ()) $ SP.Done
+          _ -> error "ERROR: getQ unable to parse StrongPacket"
 
-  interpQ (SP.Command c cmds)   = interpQ cmds
+  interpQ (SP.Command _c cmds)   = interpQ cmds
   interpQ (SP.Procedure p) = interpQ p
+  interpQ (SP.Done) =  return ()
 
 
 putStrongPacket :: (Binary c, BinaryQ p) => SP.StrongPacket c p a -> Put
@@ -133,8 +135,10 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
                  return $ Fmap (\(a,b)-> f1 a >> f2 b )$ AP.Zip (\ a b -> (a,b)) q1 q2
          3 -> return $ Fmap (\()-> return ()) $ AP.Pure ()
 
+         _ -> error "ERROR: getQ unable to parse ApplicativePacket"
 
-  interpQ (AP.Command c)   = return ()
+
+  interpQ (AP.Command _c)   = return ()
   interpQ (AP.Procedure p) = interpQ p
   interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
   interpQ (AP.Pure a)      = return a
