@@ -15,17 +15,44 @@ import qualified Network.Socket.ByteString.Lazy as NBS
 import           System.Environment
 import Types
 
+import           Control.Monad.State
+import           Control.Concurrent.STM.TMVar
+import           Control.Concurrent.STM
 
 --User function simulating a remote stack. 
-dispatchWeakPacket :: WP.WeakPacket Command Procedure a -> IO a
-dispatchWeakPacket (WP.Command (Push n)) = putStrLn $ "Push "++ (show n)
-dispatchWeakPacket (WP.Procedure (Pop)) = do 
+dispatchWeakPacket :: (TMVar [Int])-> WP.WeakPacket Command Procedure a -> IO a
+dispatchWeakPacket var (WP.Command c@(Push n)) = do 
+                                       putStrLn $ "Push "++ (show n)
+                                       st <- atomically $ takeTMVar var
+                                       let (a,s) = runState (evalCommand c) st
+                                       print s
+                                       atomically $ putTMVar var s
+                                       return a
+dispatchWeakPacket var (WP.Procedure p) = do 
                                          putStrLn $ "Pop"
-                                         return (5 ::Int)
+                                         st <- atomically $ takeTMVar var
+                                         let (a,s) = runState (evalProcedure p) st
+                                         print s
+                                         atomically $ putTMVar var s
+                                         return a
+
+
+evalProcedure :: Procedure a-> State [Int] a 
+evalProcedure (Pop) = do st <- get
+                         case st of
+                           []  -> error "Can't pop an empty stack"
+                           (x:xs) -> do
+                                      put xs
+                                      return x 
+
+evalCommand :: Command -> State [Int] ()
+evalCommand (Push n) = modify (n:)
+
+
 --
 --Lift user function into a natural transformation
-runWeakBinary ::  WP.WeakPacket Command Procedure :~> IO
-runWeakBinary =  nat dispatchWeakPacket
+runWeakBinary ::  TMVar [Int] -> WP.WeakPacket Command Procedure :~> IO
+runWeakBinary var =  nat (dispatchWeakPacket var)
 
 socketServer ::String -> IO()
 socketServer port = do 
@@ -35,7 +62,8 @@ socketServer port = do
                        bindSocket sock (addrAddress serveraddr)
                        putStrLn $ "Listening on " ++ (show port)
                        listen sock 2
-                       sockHandler sock $ server $ promoteTo runWeakBinary
+                       var <- newTMVarIO []
+                       sockHandler sock $ server $ promoteTo (runWeakBinary var)
 
 sockHandler :: Socket -> (SendAPI :~> IO) -> IO ()
 sockHandler s f = do 

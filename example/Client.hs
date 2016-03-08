@@ -29,7 +29,7 @@ createSocket host port = do
           return sock
 
 --Networking mechanism to send ByteString across a socket
-clientSend :: Socket -> IO (SendAPI :~> IO)
+clientSend :: Socket -> IO (SendAPI :~> IO )
 clientSend sock = return$ Nat ( \ (Sync bs) ->
              do
                case bs of
@@ -56,6 +56,11 @@ main = do
               [] -> error "ERROR: Requires port number as argument"
               _  -> do
                       s <-createSession "localhost" $ head port       
+                      putStrLn " push 2; push 1;"
+                      send s $ do
+                                 push 2
+                                 push 1
+
                       res <- send s $ do 
                                  push 9
                                  pop
@@ -67,7 +72,6 @@ main = do
                       
                       res3 <- send s $ do push 3
                                           r1 <- pop
-                                          push 4
                                           r2 <- pop
                                           push 5
                                           return (r1,r2)
