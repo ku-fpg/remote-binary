@@ -19,7 +19,6 @@
  , decodePacketResult
  , BinaryQ(..)
  , Fmap(..)
- , RemotePacket(..)
  , SendAPI(..)
  )
  where
@@ -37,9 +36,6 @@ import Data.Binary.Get (runGet)
 
 data SendAPI :: * -> * where
     Sync  :: ByteString -> SendAPI ByteString
-
-data RemotePacket (p :: * -> *) where
-   RemotePacket ::(Binary a) => p a  -> RemotePacket p
 
 data Fmap f a where
    Fmap :: (a -> b) -> f a -> Fmap f b
