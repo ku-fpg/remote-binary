@@ -20,22 +20,16 @@ module Control.Remote.Monad.Transport
   ) where
 
 
-import           Control.Concurrent (forkIO,threadDelay)
+import           Control.Concurrent (forkIO)
 import           Control.Concurrent.STM
 import           Control.Remote.Monad.Binary (SendAPI(..))
 import           Control.Natural
 
 import           Data.Binary
-import           Data.Binary.Get (runGet)
-import           Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString as BS
 
 import           Network.Transport
-import           Network.Transport.TCP
 
-import           System.Environment
-import           System.IO
 
 transportClient :: Transport -> EndPointAddress -> IO (SendAPI :~> IO)
 transportClient t remote = do
@@ -65,7 +59,7 @@ transportEndPointClient local remote = do
 
           EndPointClosed -> return ()
           _ -> loop
-  forkIO $ loop
+  _ <- forkIO $ loop
   case conn0 of
     Left err -> error $ show err
     Right conn -> return $ Nat $ \ (Sync bs) -> do
@@ -75,13 +69,13 @@ transportEndPointClient local remote = do
                     print (rep0)
                     case rep0 of
                       Left err -> error $ show ("Error with send"::String, show err)
-                      Right rep -> do
+                      Right _rep -> do
                         -- now we need to wait for the reply. Because we are a monad.
                         atomically $ do
                                 replies <- readTVar replyTable
                                 case [ bs | Reply n bs <- replies, n == tag ] of
-                                  [bs] -> do writeTVar replyTable [ Reply n bs | Reply n bs <- replies, n /= tag ]
-                                             return bs
+                                  [bs'] -> do writeTVar replyTable [ Reply n bs' | Reply n bs' <- replies, n /= tag ]
+                                              return bs'
                                   _    -> retry
 
 transportServer :: Transport -> (SendAPI :~> IO) -> IO ()
@@ -101,7 +95,7 @@ transportEndPointServer ep (Nat f) = do
         case event of
 
           Received _ bss -> do
-              case decode $ LBS.fromChunks bss of
+              _ <- case decode $ LBS.fromChunks bss of
                   Outgoing tag eps bs0 -> forkIO $ do
                         bs1 <- f (Sync bs0)
                         Right conn0 <- connect ep eps ReliableOrdered defaultConnectHints
@@ -111,7 +105,7 @@ transportEndPointServer ep (Nat f) = do
 
           EndPointClosed -> return ()
           _ -> loop
-  forkIO $ loop
+  _ <- forkIO $ loop
 
   return ()
 
@@ -129,31 +123,3 @@ instance Binary Reply where
   put (Reply tag bs) = put (tag,bs)  
   get = (\ (tag,bs) -> Reply tag bs) <$> get
   
-
-main :: IO ()
-main = do -- getArgs >>= main2
-  hSetBuffering stdout LineBuffering 
-  hSetBuffering stderr LineBuffering 
-  forkIO $ main2 ["server"]
-  threadDelay $ 1000 * 1000
-  main2 ["client"]
-  
-
-main2 ("client":_) = do
-  Right transport <- createTransport "localhost" "30178" defaultTCPParameters
-  Nat f <- transportClient transport $ encodeEndPointAddress "localhost" "30179" 0
-  print "calling"
-  bs <- f $ Sync $ LBS.pack [1,2,3,4]
-  print "replied"
-  print bs
-  print "done"
---  transportClient transport "localhost:30178"
-  return ()  
-
-main2 ("server":_) = do 
-  Right transport <- createTransport "localhost" "30179" defaultTCPParameters
-  transportServer transport $ Nat $ \ (Sync bs) -> do
-      print ("Remote BS:"::String,bs)
-      return $ LBS.pack [7,8,9]
-    
-  return ()

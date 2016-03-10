@@ -41,12 +41,18 @@ Test-Suite remote-transport-example
   type:       exitcode-stdio-1.0
   hs-source-dirs: example
   main-is:    Main.hs
-  build-depends:    base                   >= 4 && < 5
-                  , bytestring             >= 0.10 && < 0.11
+  build-depends:    base                   >= 4     && < 5
+                  , binary                 >= 0.8   && < 0.9
+                  , bytestring             >= 0.10  && < 0.11
+                  , mtl                    >= 2.2   && < 2.3
                   , natural-transformation >= 0.3.1 && < 0.4
-                  , remote-transport       == 0.1
                   , network-transport      >= 0.4   && < 0.5
                   , network-transport-tcp  >= 0.5   && < 0.6
+                  , remote-monad           >= 0.3   && < 0.4
+                  , remote-binary          >= 0.1   && < 0.2
+                  , remote-transport       == 0.1
+                  , stm                    >= 2.4   && < 2.5
+                  
 
   default-language:    Haskell2010
   ghc-options:         -Wall
