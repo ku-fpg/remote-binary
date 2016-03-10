@@ -10,7 +10,6 @@ import           Control.Remote.Monad.Binary
 
 
 import           Control.Remote.Monad.Transport
-import           Network.Transport  hiding (send)
 import           Network.Transport.TCP
 import           System.Environment (getArgs)
 import           Control.Concurrent  (forkIO, threadDelay)
@@ -91,7 +90,7 @@ echoServer ::IO()
 echoServer = do
        Right transport <- createTransport "localhost" "30179" defaultTCPParameters
        var <- newTMVarIO []
-       transportServer transport $ server $ promoteTo $ runWeakBinary var
+       transportServer transport $ server $ promote $ runWeakBinary var
        return ()
 
 
@@ -99,6 +98,7 @@ echoServer = do
 main :: IO()
 main = getArgs >>= main2
 
+main2::[String]-> IO()
 main2 [] = do 
    hSetBuffering stdout LineBuffering 
    hSetBuffering stderr LineBuffering 
@@ -121,7 +121,7 @@ main2 ("client":_) = do
       print r
       return ()
       r1 <- send s $ do                                      
-         return 3                                       
+         return (3 ::Int)                                       
       print r1                                                
       send s $ do                                            
                 push 8                                        

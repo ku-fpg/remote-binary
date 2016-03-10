@@ -63,7 +63,7 @@ socketServer port = do
                        putStrLn $ "Listening on " ++ (show port)
                        listen sock 2
                        var <- newTMVarIO []
-                       sockHandler sock $ server $ promoteTo (runWeakBinary var)
+                       sockHandler sock $ server $ promote (runWeakBinary var)
 
 sockHandler :: Socket -> (SendAPI :~> IO) -> IO ()
 sockHandler s f = do 
