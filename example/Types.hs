@@ -4,7 +4,6 @@
 {-# LANGUAGE TypeOperators #-}
 module Types where
  
-import           Control.Natural
 import           Control.Remote.Monad
 import           Control.Remote.Monad.Binary
 import           Data.Binary
