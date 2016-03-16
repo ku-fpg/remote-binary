@@ -169,19 +169,17 @@ encodePacket pkt = runPut (putQ pkt)
 decodePacketResult :: (BinaryQ f) => f a -> ByteString -> Either RemoteBinaryException a
 decodePacketResult pkt = runGet (interpQ' pkt)
 
-data RemoteBinaryException = MethodNotFoundException | UserRemoteException String
+data RemoteBinaryException = RemoteBinaryException String
    deriving (Show, Typeable)
 
 instance Exception RemoteBinaryException
 
 
 instance Binary RemoteBinaryException where
-    put (MethodNotFoundException) = put (220 ::Word8) 
-    put (UserRemoteException s) = do put (221:: Word8)
-                                     put s
+    put (RemoteBinaryException s) = do put (220:: Word8)
+                                       put s
 
     get = do i <-get
              case i :: Word8 of
-               220 -> return MethodNotFoundException
-               221 -> do s <- get
-                         return $ UserRemoteException s 
+               220 -> do s <- get
+                         return $ RemoteBinaryException s 

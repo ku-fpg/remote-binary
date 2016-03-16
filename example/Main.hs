@@ -44,7 +44,7 @@ dispatchWeakPacket var (WP.Procedure p) = do
 evalProcedure :: Procedure a-> State [Int] a 
 evalProcedure (Pop) = do st <- get
                          case st of
-                           []  -> throw $ UserRemoteException "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
+                           []  -> error "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
                            (x:xs) -> do
                                       put xs
                                       return x 

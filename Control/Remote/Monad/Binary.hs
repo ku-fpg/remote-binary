@@ -53,11 +53,11 @@ receiveSendAPI :: (BinaryQ f) => (f :~> IO) -> (SendAPI ~> IO)
 receiveSendAPI (Nat f) (Sync c) = do 
                      case runGet getQ c of 
                        (Fmap f' v) -> do 
-                                  r::Either RemoteBinaryException a  <- try $ f v 
+                                  r::Either SomeException a  <- try $ f v 
                                  
                                   case r of
                                     Right res -> return $runPut $ wrapSuccess (f' res)
-                                    Left  e -> return $ runPut $ wrapError (put e)
+                                    Left  e -> return $ runPut $ wrapError (put $ RemoteBinaryException (displayException e))
 
 
 wrapError :: Put -> Put
