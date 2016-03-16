@@ -50,9 +50,10 @@ class BinaryQ p  where
   putQ    :: p a -> Put            -- ^ encode a query/question as a packet
   getQ    :: Get (Fmap p Put)  -- ^ decode to the packet, which contains a way of encoding the answer
   interpQ :: p a -> Get a          -- ^ interprete the answer, in the context of the original query (type).
-  interpQ' :: p a -> Get (Either RemoteBinaryException a)
-  interpQ' pkt = do i <- get
-                    case i :: Word8 of
+
+interpQ' :: BinaryQ p => p a -> Get (Either RemoteBinaryException a)
+interpQ' pkt = do i <- get
+                  case i :: Word8 of
                       0 -> do res <- interpQ pkt
                               return $ Right res
                       1 -> do e <- get 
