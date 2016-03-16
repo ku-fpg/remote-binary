@@ -29,7 +29,7 @@ import  qualified Control.Remote.Monad.Packet.Applicative as AP
 import           Data.Binary
 import           Data.Binary.Put (runPut)
 import           Data.Binary.Get (runGet)
-import           Control.Exception
+import           Control.Exception 
 
 -- Internal sending of BinaryQ object
 sendBinaryQ :: (BinaryQ f) => (SendAPI ~> IO) -> f a -> IO a
@@ -53,9 +53,17 @@ receiveSendAPI :: (BinaryQ f) => (f :~> IO) -> (SendAPI ~> IO)
 receiveSendAPI (Nat f) (Sync c) = do 
                      case runGet getQ c of 
                        (Fmap f' v) -> do 
-                                  r  <- f v 
-                                  putStrLn "here"
-                                  return $ runPut $ f' r
+                                  r::Either RemoteBinaryException a  <- try $ f v 
+                                 
+                                  case r of
+                                    Right res -> return $runPut $ wrapSuccess (f' res)
+                                    Left  e -> return $ runPut $ wrapError (put e)
+
+
+wrapError :: Put -> Put
+wrapError m = put (1::Word8) >> m
+wrapSuccess :: Put -> Put
+wrapSuccess m = put (0::Word8) >> m
 
 -- | This function takes a function that can execute a remote-monad packet containing the User's GADT 
 --   and elevates it to handle the encoding of the response

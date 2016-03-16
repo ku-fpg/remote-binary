@@ -38,7 +38,6 @@ dispatchWeakPacket var (WP.Procedure p) = do
                                          let (a,s) = runState (evalProcedure p) st
                                          print s
                                          atomically $ putTMVar var s
-                                         putStrLn "No here"
                                          return a
 
 
@@ -48,7 +47,7 @@ evalProcedure (Pop) = do st <- get
                            []  -> throw $ UserRemoteException "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
                            (x:xs) -> do
                                       put xs
-                                      return (Right x) 
+                                      return x 
 
 evalCommand :: Command -> State [Int] ()
 evalCommand (Push n) = modify (n:)
@@ -87,14 +86,14 @@ sockHandler s f = do
 
                         _ -> do 
                                 res <- f1 (Sync bs) 
-                                let res' = BS.append  "FF" res
-                                NBS.sendAll sock $ res'
+                             --   let res' = BS.append  "FF" res
+                                NBS.sendAll sock $ res
                                 loop sock (Nat f1)
 
 
 -- ============= Client Code =============
-add :: Either String Int -> Either String Int -> Either String Int
-add x y = (+)<$> x <*>  y
+add :: Int -> Int -> Int
+add x y = x +  y
 
 createSocket :: HostName -> String -> IO Socket
 createSocket host port = do
@@ -115,10 +114,7 @@ clientSend sock = return$ Nat ( \ (Sync bs) ->
                   _ ->do
                      NBS.sendAll sock bs
                      res <- NBS.recv sock 4096
-
-                     --Everything from server has FF at front
-                     --(in order to send () (empty string)
-                     return $ BS.drop 2 res
+                     return res
               )
 -- Initializes socket and setup as sending method for RemoteMonad 
 createSession :: String -> String -> IO (RemoteMonad Command Procedure :~> IO)
@@ -126,6 +122,11 @@ createSession host port =do
                sock <- createSocket host port 
                (Nat f) <- clientSend sock
                return $ monadClient f
+
+createSession2 :: IO (RemoteMonad Command Procedure :~> IO)
+createSession2 = do
+                   var <- newTMVarIO []
+                   return $ monadClient (run $ server $ promote (runWeakBinary var))
 
 main :: IO()
 main = getArgs >>= main2
@@ -154,7 +155,7 @@ main2 ("client":_)= do
                                  pop
                       putStrLn "push 9; pop:"
                       print res
-                      res2 <- send s $ do add <$> pop <*> pure (Right 3)
+                      res2 <- send s $ do add <$> pop <*> (pure 3)
                       putStrLn "add <$> pop <*> pure 3:"
                       print res2
                       

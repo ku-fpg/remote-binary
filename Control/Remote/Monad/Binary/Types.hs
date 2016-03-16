@@ -51,7 +51,7 @@ class BinaryQ p  where
   getQ    :: Get (Fmap p Put)  -- ^ decode to the packet, which contains a way of encoding the answer
   interpQ :: p a -> Get a          -- ^ interprete the answer, in the context of the original query (type).
 
-interpQ' :: BinaryQ p => p a -> Get (Either RemoteBinaryException a)
+interpQ' :: (BinaryQ p, Exception e, Binary e) => p a -> Get (Either e a)
 interpQ' pkt = do i <- get
                   case i :: Word8 of
                       0 -> do res <- interpQ pkt
@@ -176,12 +176,12 @@ instance Exception RemoteBinaryException
 
 
 instance Binary RemoteBinaryException where
-    put (MethodNotFoundException) = put (400 ::Word8) 
-    put (UserRemoteException s) = do put (401:: Word8)
+    put (MethodNotFoundException) = put (220 ::Word8) 
+    put (UserRemoteException s) = do put (221:: Word8)
                                      put s
 
     get = do i <-get
              case i :: Word8 of
-               400 -> return MethodNotFoundException
-               401 -> do s <- get
+               220 -> return MethodNotFoundException
+               221 -> do s <- get
                          return $ UserRemoteException s 

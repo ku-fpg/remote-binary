@@ -25,7 +25,7 @@ instance Binary Command where
             return $ Push i
 
 data Procedure :: * -> * where
-  Pop :: Procedure (Either String Int)    -- POP
+  Pop :: Procedure Int    -- POP
 
 instance BinaryQ Procedure where
    getQ = do i <- get
@@ -42,5 +42,5 @@ instance BinaryQ Procedure where
 push :: Int -> RemoteMonad Command Procedure ()
 push n = command $ Push n
 
-pop :: RemoteMonad Command Procedure (Either String Int)
+pop :: RemoteMonad Command Procedure Int
 pop = procedure $ Pop
