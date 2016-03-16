@@ -20,6 +20,7 @@ module Control.Remote.Monad.Binary
     , send
     , monadClient
     , server
+    , RemoteBinaryException(..)
     ) where
 import           Control.Natural
 import           Control.Remote.Monad
@@ -28,12 +29,16 @@ import  qualified Control.Remote.Monad.Packet.Applicative as AP
 import           Data.Binary
 import           Data.Binary.Put (runPut)
 import           Data.Binary.Get (runGet)
+import           Control.Exception
 
 -- Internal sending of BinaryQ object
 sendBinaryQ :: (BinaryQ f) => (SendAPI ~> IO) -> f a -> IO a
 sendBinaryQ f pkt = do 
                         r <- f (Sync (encodePacket  pkt))
-                        return $ decodePacketResult pkt r 
+                        case decodePacketResult pkt r of
+                           Left e -> throw e
+                           Right a -> return a
+
 -- | This function is used to convert a function that can transport ByteStrings in a SendAPI wrapper to a function
 --   that can use the remote-monad bundling strategies and then send them via the input function.
 monadClient :: forall c p f . (f ~ AP.ApplicativePacket, BinaryQ (f c p))=> (SendAPI ~> IO) -> (RemoteMonad c p  :~> IO)
@@ -49,6 +54,7 @@ receiveSendAPI (Nat f) (Sync c) = do
                      case runGet getQ c of 
                        (Fmap f' v) -> do 
                                   r  <- f v 
+                                  putStrLn "here"
                                   return $ runPut $ f' r
 
 -- | This function takes a function that can execute a remote-monad packet containing the User's GADT 
@@ -59,4 +65,3 @@ server f =  nat $ receiveSendAPI $ f
 -- | send remote monad , equivalent to executing the natural transformation on the RemoteMonad
 send :: (RemoteMonad c p :~> IO) -> (RemoteMonad c p a)-> IO a
 send f m =  f # m 
-

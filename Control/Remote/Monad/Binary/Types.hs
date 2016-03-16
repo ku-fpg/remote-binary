@@ -20,6 +20,7 @@
  , BinaryQ(..)
  , Fmap(..)
  , SendAPI(..)
+ , RemoteBinaryException(..)
  )
  where
 
@@ -30,7 +31,8 @@ import Data.ByteString.Lazy
 import Data.Binary
 import Data.Binary.Put (runPut)
 import Data.Binary.Get (runGet)
-
+import Control.Exception
+import Data.Typeable
 
 -------------
 
@@ -48,6 +50,13 @@ class BinaryQ p  where
   putQ    :: p a -> Put            -- ^ encode a query/question as a packet
   getQ    :: Get (Fmap p Put)  -- ^ decode to the packet, which contains a way of encoding the answer
   interpQ :: p a -> Get a          -- ^ interprete the answer, in the context of the original query (type).
+  interpQ' :: p a -> Get (Either RemoteBinaryException a)
+  interpQ' pkt = do i <- get
+                    case i :: Word8 of
+                      0 -> do res <- interpQ pkt
+                              return $ Right res
+                      1 -> do e <- get 
+                              return $ Left e
 
 -------------
 -- ############## Weak Packet BinaryQ Instance #######################
@@ -66,9 +75,8 @@ instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
                 return $ Fmap f (WP.Procedure  p)
           _ -> error "ERROR: function getQ unable to parse WeakPacket"
 
-  interpQ (WP.Command _c)   = return ()
-  interpQ (WP.Procedure p) = interpQ p
-
+  interpQ (WP.Command _c)   =  return () 
+  interpQ (WP.Procedure p)  =  interpQ p 
 
 putWeakPacket :: (Binary c, BinaryQ p) => WP.WeakPacket c p a -> Put
 putWeakPacket (WP.Command c) = do
@@ -101,7 +109,6 @@ instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
   interpQ (SP.Procedure p) = interpQ p
   interpQ (SP.Done) =  return ()
 
-
 putStrongPacket :: (Binary c, BinaryQ p) => SP.StrongPacket c p a -> Put
 putStrongPacket (SP.Command c cmds) = do
    put (0 :: Word8)
@@ -133,7 +140,6 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
 
          _ -> error "ERROR: getQ unable to parse ApplicativePacket"
 
-
   interpQ (AP.Command _c)   = return ()
   interpQ (AP.Procedure p) = interpQ p
   interpQ (AP.Zip f x y)   = f <$> interpQ x <*> interpQ y
@@ -159,5 +165,22 @@ putApplicativePacket (AP.Pure _) = do
 encodePacket :: (BinaryQ f) =>  f a -> ByteString 
 encodePacket pkt = runPut (putQ pkt)
 
-decodePacketResult :: (BinaryQ f) => f a -> ByteString -> a
-decodePacketResult pkt = runGet (interpQ pkt)
+decodePacketResult :: (BinaryQ f) => f a -> ByteString -> Either RemoteBinaryException a
+decodePacketResult pkt = runGet (interpQ' pkt)
+
+data RemoteBinaryException = MethodNotFoundException | UserRemoteException String
+   deriving (Show, Typeable)
+
+instance Exception RemoteBinaryException
+
+
+instance Binary RemoteBinaryException where
+    put (MethodNotFoundException) = put (400 ::Word8) 
+    put (UserRemoteException s) = do put (401:: Word8)
+                                     put s
+
+    get = do i <-get
+             case i :: Word8 of
+               400 -> return MethodNotFoundException
+               401 -> do s <- get
+                         return $ UserRemoteException s 

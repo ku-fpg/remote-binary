@@ -19,6 +19,7 @@ import           Control.Monad.State
 import           Control.Concurrent
 import           Control.Concurrent.STM.TMVar
 import           Control.Concurrent.STM
+import           Control.Exception
 
 import           Types
 -- =========== Server Code ==============
@@ -37,16 +38,17 @@ dispatchWeakPacket var (WP.Procedure p) = do
                                          let (a,s) = runState (evalProcedure p) st
                                          print s
                                          atomically $ putTMVar var s
+                                         putStrLn "No here"
                                          return a
 
 
 evalProcedure :: Procedure a-> State [Int] a 
 evalProcedure (Pop) = do st <- get
                          case st of
-                           []  -> error "Can't pop an empty stack"
+                           []  -> throw $ UserRemoteException "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
                            (x:xs) -> do
                                       put xs
-                                      return x 
+                                      return (Right x) 
 
 evalCommand :: Command -> State [Int] ()
 evalCommand (Push n) = modify (n:)
@@ -91,8 +93,8 @@ sockHandler s f = do
 
 
 -- ============= Client Code =============
-add :: Int -> Int -> Int
-add x y = x + y
+add :: Either String Int -> Either String Int -> Either String Int
+add x y = (+)<$> x <*>  y
 
 createSocket :: HostName -> String -> IO Socket
 createSocket host port = do
@@ -152,7 +154,7 @@ main2 ("client":_)= do
                                  pop
                       putStrLn "push 9; pop:"
                       print res
-                      res2 <- send s $ do add <$> pop <*> pure 3
+                      res2 <- send s $ do add <$> pop <*> pure (Right 3)
                       putStrLn "add <$> pop <*> pure 3:"
                       print res2
                       
