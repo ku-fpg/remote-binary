@@ -146,7 +146,7 @@ main2 ("client":_)= do
         case port of
               [] -> error "ERROR: Requires port number as argument"
               _  -> do
-                      sock <- createSocket "129.237.120.39" port
+                      sock <- createSocket "localhost" port
                       (Nat f) <- clientSend sock
                       let s =  monadClient f
 
