@@ -31,27 +31,34 @@ dispatchWeakPacket var (WP.Command c@(Push n)) = do
                                        let (a,s) = runState (evalCommand c) st
                                        print s
                                        atomically $ putTMVar var s
-                                       return a
+                                       case a of
+                                         Left s -> error s
+                                         Right a' -> return a'
 dispatchWeakPacket var (WP.Procedure p) = do 
                                          putStrLn $ "Pop"
                                          st <- atomically $ takeTMVar var
                                          let (a,s) = runState (evalProcedure p) st
                                          print s
                                          atomically $ putTMVar var s
-                                         return a
+                                         case a of
+                                           Left s -> error s
+                                           Right a' -> return a'
 
 
-evalProcedure :: Procedure a-> State [Int] a 
+evalProcedure :: Procedure a-> State [Int] (Either String a) 
 evalProcedure (Pop) = do st <- get
                          case st of
-                           []  -> error "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
+                           []  ->  return $ Left "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
                            (x:xs) -> do
                                       put xs
-                                      return x 
+                                      return $ Right x 
+evalProcedure _p = return $ Left "Unrecognized procedure"
 
-evalCommand :: Command -> State [Int] ()
-evalCommand (Push n) = modify (n:)
-
+evalCommand :: Command -> State [Int] (Either String ())
+evalCommand (Push n) =  do modify (n:)
+                           return $ Right ()
+                         
+evalCommand _c = return $ Left "Unrecognized command"
 
 --
 --Lift user function into a natural transformation
@@ -80,15 +87,12 @@ sockHandler s f = do
          loop :: Socket -> (SendAPI :~> IO) -> IO()
          loop sock (Nat f1) = do
                      bs <- NBS.recv sock 4096
-                     case bs of
-                        -- End of Message  (implementation detail with Sockets)
-                        "" -> return ()
-
-                        _ -> do 
-                                res <- f1 (Sync bs) 
-                             --   let res' = BS.append  "FF" res
-                                NBS.sendAll sock $ res
-                                loop sock (Nat f1)
+                     case bs of 
+                       "" -> return ()
+                       _  -> do
+                         res <- f1 (Sync bs) 
+                         NBS.sendAll sock $ res
+                         loop sock (Nat f1)
 
 
 -- ============= Client Code =============
@@ -108,13 +112,10 @@ createSocket host port = do
 clientSend :: Socket -> IO (SendAPI :~> IO )
 clientSend sock = return$ Nat ( \ (Sync bs) ->
              do
-               case bs of
-
-                  "\ETX" -> return $ BS.pack []
-                  _ ->do
-                     NBS.sendAll sock bs
-                     res <- NBS.recv sock 4096
-                     return res
+             -- NBS.sendAll sock bs -- correct one
+              NBS.sendAll sock (BS.append (BS.pack [8,9,10]) bs)
+              res <- NBS.recv sock 4096
+              return res
               )
 -- Initializes socket and setup as sending method for RemoteMonad 
 createSession :: String -> String -> IO (RemoteMonad Command Procedure :~> IO)
@@ -122,7 +123,8 @@ createSession host port =do
                sock <- createSocket host port 
                (Nat f) <- clientSend sock
                return $ monadClient f
-
+--
+-- Session without using Sockets
 createSession2 :: IO (RemoteMonad Command Procedure :~> IO)
 createSession2 = do
                    var <- newTMVarIO []
@@ -144,8 +146,11 @@ main2 ("client":_)= do
         case port of
               [] -> error "ERROR: Requires port number as argument"
               _  -> do
-                      s <-createSession "localhost" port       
-                      putStrLn " push 2; push 1;"
+                      sock <- createSocket "129.237.120.39" port
+                      (Nat f) <- clientSend sock
+                      let s =  monadClient f
+
+                      putStrLn "push 2\npush 1"
                       send s $ do
                                  push 2
                                  push 1
@@ -153,7 +158,7 @@ main2 ("client":_)= do
                       res <- send s $ do 
                                  push 9
                                  pop
-                      putStrLn "push 9; pop:"
+                      putStrLn "push 9\npop:"
                       print res
                       res2 <- send s $ do add <$> pop <*> (pure 3)
                       putStrLn "add <$> pop <*> pure 3:"
@@ -161,17 +166,16 @@ main2 ("client":_)= do
                       
                       res3 <- send s $ do push 3
                                           r1 <- pop
+                                          push 4
                                           r2 <- pop
                                           push 5
                                           return (r1,r2)
-                      putStrLn "push 3; r1<- pop; push 4; r2<- pop; push5; return (r1,r2):" 
+                      putStrLn "push 3\nr1<- pop\npush 4\nr2<- pop\npush5\nreturn (r1,r2):" 
                       print res3
-
+                      close sock
 
 
 main2 ("server":_) = do
         let port ="5500"
-        case port of
-          [] -> error "ERROR: Requires Port number as argument"
-          _  -> socketServer  port
+        socketServer  port
 

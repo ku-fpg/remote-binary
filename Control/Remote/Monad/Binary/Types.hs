@@ -30,7 +30,7 @@ import qualified Control.Remote.Monad.Packet.Applicative as AP
 import Data.ByteString.Lazy
 import Data.Binary
 import Data.Binary.Put (runPut)
-import Data.Binary.Get (runGet)
+import Data.Binary.Get (runGetOrFail)
 import Control.Exception
 import Data.Typeable
 
@@ -74,7 +74,6 @@ instance (Binary c, BinaryQ p) => BinaryQ (WP.WeakPacket c p) where
           1 -> do 
                 (Fmap f p) <- getQ
                 return $ Fmap f (WP.Procedure  p)
-          _ -> error "ERROR: function getQ unable to parse WeakPacket"
 
   interpQ (WP.Command _c)   =  return () 
   interpQ (WP.Procedure p)  =  interpQ p 
@@ -104,7 +103,6 @@ instance (Binary c, BinaryQ p) => BinaryQ (SP.StrongPacket c p) where
                 Fmap f p <- getQ
                 return $ Fmap  f $ SP.Procedure p
           2 -> return $ Fmap (\() -> return ()) $ SP.Done
-          _ -> error "ERROR: getQ unable to parse StrongPacket"
 
   interpQ (SP.Command _c cmds)   = interpQ cmds
   interpQ (SP.Procedure p) = interpQ p
@@ -139,7 +137,6 @@ instance (Binary c, BinaryQ p) => BinaryQ (AP.ApplicativePacket c p) where
                  return $ Fmap (\(a,b)-> f1 a >> f2 b )$ AP.Zip (\ a b -> (a,b)) q1 q2
          3 -> return $ Fmap (\()-> return ()) $ AP.Pure ()
 
-         _ -> error "ERROR: getQ unable to parse ApplicativePacket"
 
   interpQ (AP.Command _c)   = return ()
   interpQ (AP.Procedure p) = interpQ p
@@ -167,7 +164,9 @@ encodePacket :: (BinaryQ f) =>  f a -> ByteString
 encodePacket pkt = runPut (putQ pkt)
 
 decodePacketResult :: (BinaryQ f) => f a -> ByteString -> Either RemoteBinaryException a
-decodePacketResult pkt = runGet (interpQ' pkt)
+decodePacketResult pkt bs= case runGetOrFail (interpQ' pkt) bs of
+                             Left (_bs,_bo,s) -> Left $ RemoteBinaryException s  -- Get Failed
+                             Right (_bs, _bo, a) -> a 
 
 data RemoteBinaryException = RemoteBinaryException String
    deriving (Show, Typeable)

@@ -28,7 +28,7 @@ import           Control.Remote.Monad.Binary.Types
 import  qualified Control.Remote.Monad.Packet.Applicative as AP
 import           Data.Binary
 import           Data.Binary.Put (runPut)
-import           Data.Binary.Get (runGet)
+import           Data.Binary.Get (runGetOrFail)
 import           Control.Exception 
 
 -- Internal sending of BinaryQ object
@@ -51,14 +51,14 @@ monadClient f = runMonad g
 -- internal receiving of sync object
 receiveSendAPI :: (BinaryQ f) => (f :~> IO) -> (SendAPI ~> IO)
 receiveSendAPI (Nat f) (Sync c) = do 
-                     case runGet getQ c of 
-                       (Fmap f' v) -> do 
+                     case runGetOrFail getQ c of 
+                       Right (_bs,_bo,(Fmap f' v)) -> do 
                                   r::Either SomeException a  <- try $ f v 
                                  
                                   case r of
                                     Right res -> return $runPut $ wrapSuccess (f' res)
                                     Left  e -> return $ runPut $ wrapError (put $ RemoteBinaryException (displayException e))
-
+                       Left (_bs,_bo,s)  -> return $ runPut $ wrapError ( put $ RemoteBinaryException "Malformed Packet")
 
 wrapError :: Put -> Put
 wrapError m = put (1::Word8) >> m
