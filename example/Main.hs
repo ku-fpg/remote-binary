@@ -23,16 +23,16 @@ import           Control.Exception
 
 import           Types
 -- =========== Server Code ==============
---User function simulating a remote stack. 
+--User function simulating a remote stack.
 dispatchWeakPacket :: (TMVar [Int])-> WP.WeakPacket Command Procedure a -> IO a
-dispatchWeakPacket var (WP.Command c@(Push n)) = do 
+dispatchWeakPacket var (WP.Command c@(Push n)) = do
                                        putStrLn $ "Push "++ (show n)
                                        st <- atomically $ takeTMVar var
                                        let (a,s) = runState (evalCommand c) st
                                        print s
                                        atomically $ putTMVar var s
                                        return a
-dispatchWeakPacket var (WP.Procedure p) = do 
+dispatchWeakPacket var (WP.Procedure p) = do
                                          putStrLn $ "Pop"
                                          st <- atomically $ takeTMVar var
                                          let (a,s) = runState (evalProcedure p) st
@@ -41,13 +41,13 @@ dispatchWeakPacket var (WP.Procedure p) = do
                                          return a
 
 
-evalProcedure :: Procedure a-> State [Int] a 
+evalProcedure :: Procedure a-> State [Int] a
 evalProcedure (Pop) = do st <- get
                          case st of
                            []  -> error "Can't pop an empty stack" --return $ Left "Can't pop an empty stack"
                            (x:xs) -> do
                                       put xs
-                                      return x 
+                                      return x
 
 evalCommand :: Command -> State [Int] ()
 evalCommand (Push n) = modify (n:)
@@ -56,10 +56,10 @@ evalCommand (Push n) = modify (n:)
 --
 --Lift user function into a natural transformation
 runWeakBinary ::  TMVar [Int] -> WP.WeakPacket Command Procedure :~> IO
-runWeakBinary var =  nat (dispatchWeakPacket var)
+runWeakBinary var =  wrapNT (dispatchWeakPacket var)
 
 socketServer ::String -> IO()
-socketServer port = do 
+socketServer port = do
                        addrinfo <- getAddrInfo (Just (defaultHints {addrFlags=[AI_PASSIVE]})) Nothing (Just port)
                        let serveraddr = head addrinfo
                        sock <- socket (addrFamily serveraddr) Stream defaultProtocol
@@ -70,7 +70,7 @@ socketServer port = do
                        sockHandler sock $ server $ promote (runWeakBinary var)
 
 sockHandler :: Socket -> (SendAPI :~> IO) -> IO ()
-sockHandler s f = do 
+sockHandler s f = do
            (sock, addr) <- accept s
            putStrLn $ "Accepted socket from : "++ (show addr)
            loop sock f
@@ -78,17 +78,17 @@ sockHandler s f = do
        where
         -- Receive bytestring from client and frame response with "FF"
          loop :: Socket -> (SendAPI :~> IO) -> IO()
-         loop sock (Nat f1) = do
+         loop sock (NT f1) = do
                      bs <- NBS.recv sock 4096
                      case bs of
                         -- End of Message  (implementation detail with Sockets)
                         "" -> return ()
 
-                        _ -> do 
-                                res <- f1 (Sync bs) 
+                        _ -> do
+                                res <- f1 (Sync bs)
                              --   let res' = BS.append  "FF" res
                                 NBS.sendAll sock $ res
-                                loop sock (Nat f1)
+                                loop sock (NT f1)
 
 
 -- ============= Client Code =============
@@ -106,7 +106,7 @@ createSocket host port = do
 
 --Networking mechanism to send ByteString across a socket
 clientSend :: Socket -> IO (SendAPI :~> IO )
-clientSend sock = return$ Nat ( \ (Sync bs) ->
+clientSend sock = return$ NT ( \ (Sync bs) ->
              do
                case bs of
 
@@ -116,41 +116,41 @@ clientSend sock = return$ Nat ( \ (Sync bs) ->
                      res <- NBS.recv sock 4096
                      return res
               )
--- Initializes socket and setup as sending method for RemoteMonad 
+-- Initializes socket and setup as sending method for RemoteMonad
 createSession :: String -> String -> IO (RemoteMonad Command Procedure :~> IO)
-createSession host port =do 
-               sock <- createSocket host port 
-               (Nat f) <- clientSend sock
+createSession host port =do
+               sock <- createSocket host port
+               (NT f) <- clientSend sock
                return $ monadClient f
 
 createSession2 :: IO (RemoteMonad Command Procedure :~> IO)
 createSession2 = do
                    var <- newTMVarIO []
-                   return $ monadClient (run $ server $ promote (runWeakBinary var))
+                   return $ monadClient (unwrapNT $ server $ promote (runWeakBinary var))
 
 main :: IO()
 main = getArgs >>= main2
 
 main2:: [String] -> IO()
 main2 []  = do
-   hSetBuffering stdout LineBuffering 
-   hSetBuffering stderr LineBuffering 
-   _ <- forkIO $ main2 ["server"]          
-   threadDelay $ 1000 * 1000          
-   main2 ["client"]         
+   hSetBuffering stdout LineBuffering
+   hSetBuffering stderr LineBuffering
+   _ <- forkIO $ main2 ["server"]
+   threadDelay $ 1000 * 1000
+   main2 ["client"]
 
 main2 ("client":_)= do
         let port ="5500"
         case port of
               [] -> error "ERROR: Requires port number as argument"
               _  -> do
-                      s <-createSession "localhost" port       
+                      s <-createSession "localhost" port
                       putStrLn " push 2; push 1;"
                       send s $ do
                                  push 2
                                  push 1
 
-                      res <- send s $ do 
+                      res <- send s $ do
                                  push 9
                                  pop
                       putStrLn "push 9; pop:"
@@ -158,13 +158,13 @@ main2 ("client":_)= do
                       res2 <- send s $ do add <$> pop <*> (pure 3)
                       putStrLn "add <$> pop <*> pure 3:"
                       print res2
-                      
+
                       res3 <- send s $ do push 3
                                           r1 <- pop
                                           r2 <- pop
                                           push 5
                                           return (r1,r2)
-                      putStrLn "push 3; r1<- pop; push 4; r2<- pop; push5; return (r1,r2):" 
+                      putStrLn "push 3; r1<- pop; push 4; r2<- pop; push5; return (r1,r2):"
                       print res3
 
 
