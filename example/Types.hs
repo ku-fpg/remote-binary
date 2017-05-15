@@ -1,46 +1,40 @@
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE TypeOperators     #-}
 module Types where
- 
+
 import           Control.Remote.Monad
 import           Control.Remote.Monad.Binary
 import           Data.Binary
 
-{-
-import           Control.Remote.Monad.Transport
-import           Network.Transport  hiding (send)
-import           Network.Transport.TCP
--}
+data Prim :: * -> * where
+  Push :: Int -> Prim ()   -- PUSH
+  Pop  ::        Prim Int  -- POP
 
+instance KnownResult Prim where
+  knownResult (Push _) = Just ()
+  knownResult  Pop     = Nothing
 
-data Command :: * where
-   Push :: Int -> Command   -- PUSH
- deriving (Show)
-
-instance Binary Command where
-   put (Push n) = put n
-   get = do i <- get
-            return $ Push i
-
-data Procedure :: * -> * where
-  Pop :: Procedure Int    -- POP
-
-instance BinaryQ Procedure where
+instance BinaryQ Prim where
    getQ = do i <- get
              case i :: Word8 of
-               0 -> return $ Fmap put Pop
-   putQ (Pop)= put (0 :: Word8) 
+               0 -> do
+                    j <- get
+                    return $ Fmap put (Push j)
+               1 -> return $ Fmap put Pop
+               _ -> error "Expected a Prim but got something else"
+   putQ (Push i) =do
+                     put (0 :: Word8)
+                     put i
+   putQ (Pop)  = put (1 :: Word8)
 
-   interpQ (Pop) = get
+   interpQ (Push _) = return ()
+   interpQ (Pop)  = get
 
 
+push :: Int -> RemoteMonad Prim ()
+push n = primitive $ Push n
 
-
-
-push :: Int -> RemoteMonad Command Procedure ()
-push n = command $ Push n
-
-pop :: RemoteMonad Command Procedure Int
-pop = procedure $ Pop
+pop :: RemoteMonad Prim Int
+pop = primitive $ Pop

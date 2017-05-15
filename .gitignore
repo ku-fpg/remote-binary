@@ -1,4 +1,5 @@
 .cabal-*
 cabal.*
 dist/
+.stack-work/
 *~

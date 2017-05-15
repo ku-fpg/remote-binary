@@ -1,7 +1,7 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
 
 
 {-|
@@ -22,14 +22,14 @@ module Control.Remote.Monad.Binary
     , server
     , RemoteBinaryException(..)
     ) where
+import           Control.Exception
 import           Control.Natural
 import           Control.Remote.Monad
 import           Control.Remote.Monad.Binary.Types
-import  qualified Control.Remote.Monad.Packet.Applicative as AP
+import qualified Control.Remote.Packet.Applicative as AP
 import           Data.Binary
-import           Data.Binary.Put (runPut)
-import           Data.Binary.Get (runGet)
-import           Control.Exception
+import           Data.Binary.Get                   (runGet)
+import           Data.Binary.Put                   (runPut)
 
 -- Internal sending of BinaryQ object
 sendBinaryQ :: (BinaryQ f) => (SendAPI ~> IO) -> f a -> IO a
@@ -41,10 +41,10 @@ sendBinaryQ f pkt = do
 
 -- | This function is used to convert a function that can transport ByteStrings in a SendAPI wrapper to a function
 --   that can use the remote-monad bundling strategies and then send them via the input function.
-monadClient :: forall c p f . (f ~ AP.ApplicativePacket, BinaryQ (f c p))=> (SendAPI ~> IO) -> (RemoteMonad c p  :~> IO)
+monadClient :: forall p f . (f ~ AP.ApplicativePacket, BinaryQ (f p), KnownResult p)=> (SendAPI ~> IO) -> (RemoteMonad p  :~> IO)
 monadClient f = runMonad g
           where
-               g :: (AP.ApplicativePacket c p :~> IO)
+               g :: (AP.ApplicativePacket p :~> IO)
                g = wrapNT $ sendBinaryQ f
 
 
@@ -67,9 +67,9 @@ wrapSuccess m = put (0::Word8) >> m
 
 -- | This function takes a function that can execute a remote-monad packet containing the User's GADT
 --   and elevates it to handle the encoding of the response
-server :: (Binary c, BinaryQ p)=> (AP.ApplicativePacket c p :~> IO ) -> (SendAPI :~> IO )
+server :: (BinaryQ p)=> (AP.ApplicativePacket p :~> IO ) -> (SendAPI :~> IO )
 server f =  wrapNT $ receiveSendAPI $ f
 
 -- | send remote monad , equivalent to executing the natural transformation on the RemoteMonad
-send :: (RemoteMonad c p :~> IO) -> (RemoteMonad c p a)-> IO a
+send :: (RemoteMonad p :~> IO) -> (RemoteMonad p a)-> IO a
 send f m =  f # m
